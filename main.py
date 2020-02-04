@@ -329,6 +329,7 @@ class RepeatWords(QMainWindow):
     def initUI(self, window_title):
         self.AlertWindow = Alert(self, [])
         self.MessageWindow = Message(self, [])
+        self.ShowWindow = Show(self, [])
         self.setWindowTitle(window_title)
 
         self.choice_buttons = [
@@ -345,6 +346,9 @@ class RepeatWords(QMainWindow):
 
         self.HintButton.clicked.connect(self.hint)
         self.HintButton.setText('Hint')
+
+        self.ShowButton.clicked.connect(self.show_words)
+        self.ShowButton.setText('Show')
 
         [self.choice_buttons[i].clicked.connect(self.are_you_right) for i in range(len(self.choice_buttons))]
 
@@ -399,13 +403,13 @@ class RepeatWords(QMainWindow):
             )
             if self.word.get_examples(examples_only=True):
                 self.AlertWindow.display(
-                    result='excellent',
+                    result='<i>excellent</i>',
                     example=self.word.get_examples(examples_only=True, by_list=True),
                     style="color: 'green';"
                 )
             else:
                 self.MessageWindow.display(
-                    message='excellent',
+                    message='<i>excellent</i>',
                     style="color: 'green';"
                 )
 
@@ -413,7 +417,7 @@ class RepeatWords(QMainWindow):
                 self.test()
             else:
                 self.MessageWindow.display(
-                    message='The end',
+                    message='<i>The end</i>',
                     style="color: 'black';"
                 )
                 self.close()
@@ -426,13 +430,13 @@ class RepeatWords(QMainWindow):
 
             if self.word.get_examples(examples_only=True):
                 self.AlertWindow.display(
-                    result='wrong',
+                    result='<b>Wrong</b>',
                     example=self.word.get_examples(examples_only=True, by_list=True),
                     style="color: 'red';"
                 )
             else:
                 self.MessageWindow.display(
-                    message='wrong',
+                    message='<b>Wrong</b>',
                     style="color: 'red';"
                 )
 
@@ -443,6 +447,19 @@ class RepeatWords(QMainWindow):
                 self.word.get_examples(examples_only=True),
                 style="color: blue"
             )
+
+    def show_words(self):
+        self.ShowWindow.display(self.words, self.windowTitle())
+
+    def show(self):
+        super().show()
+        self.show_words()
+
+    def close(self):
+        self.AlertWindow.close()
+        self.MessageWindow.close()
+        self.ShowWindow.close()
+        super().close()
 
     def log(self, word, result, w_choice=''):
         """
@@ -484,13 +501,14 @@ class Alert(QWidget):
         self.Examples.setText('')
 
     def display(self, result, example, style=''):
-        self.Result.setText(result.capitalize())
+        self.Result.setText(result)
 
         if style:
             self.Result.setStyleSheet(style)
 
         assert len(example) > 0
 
+        # TODO: bold the word
         self.Examples.setText('\n'.join(map(lambda x: f"{x[0]}. {x[1]}", enumerate(example, 1))))
 
         self.show()
@@ -511,7 +529,26 @@ class Message(QWidget):
         if style:
             self.MessageText.setStyleSheet(style)
 
-        self.MessageText.setText(message.capitalize())
+        self.MessageText.setText(message)
+        self.show()
+
+
+class Show(QWidget):
+    def __init__(self, *args):
+        super().__init__()
+        uic.loadUi(ShowWindow, self)
+
+    def display(self, items, window_title='Show'):
+        self.setWindowTitle(window_title)
+
+        self.EnglishWordsBrowser.setText(
+            '\n'.join(map(
+                    lambda x: f"<i><b>{x.word.capitalize()}</b></i> – {x.get_russian(def_only=True)}<br>",
+                    items
+                )
+            )
+        )
+
         self.show()
 
 
@@ -1363,18 +1400,16 @@ try:
     # init_from_xlsx('2_3_2020.xlsx', 'content')
     dictionary = Vocabulary()
     # print(dictionary.information())
-    # print(dictionary('think'))
+    # print(dictionary('fulfil'))
 
     # eng = dictionary.how_to_say_in_russian()
     # shuffle(eng)
     # create_pdf(eng, out_file='How to say in it Russian')
 
-    # dictionary.repeat(date='31.1.2020', mode=1)
+    dictionary.repeat(date='31.1.2020', mode=1)
     # dictionary.repeat(date='31.1.2020', mode=2)
 except Exception as trouble:
     print(trouble)
-
-# TODO: окно со списком всех изученных за день слов перед их повторением
 
 # TODO: создать SQL (?) базу данных, ноч то делать с датами?:
 #  id – слово – транскрипция – свойства – английское определение – русское определение

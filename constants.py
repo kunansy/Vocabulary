@@ -24,6 +24,7 @@ s_tab = '\n\t\t\t'
 MainRepeatWindow = 'ui\\MainWindow.ui'
 AlertWindow = 'ui\\AlertWindow.ui'
 MessageWindow = 'ui\\MessageWindow.ui'
+ShowWindow = 'ui\\ShowWindow.ui'
 log_filename = 'Repeating of the learned words'
 
 mods = {
