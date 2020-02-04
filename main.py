@@ -664,10 +664,10 @@ class Word:
 
         return Word(
             max(self.word, other.word),
-            self.properties + other.properties,
-            self.english[:] + other.english[:],
-            self.russian[:] + other.russian[:],
-            self.examples[:] + other.examples[:]
+            other.properties + self.properties,
+            other.english[:] + self.english[:],
+            other.russian[:] + self.russian[:],
+            other.examples[:] + self.examples[:]
         )
 
     def __eq__(self, other):
@@ -1360,6 +1360,8 @@ try:
     # dictionary.repeat(date='31.1.2020', mode=2)
 except Exception as trouble:
     print(trouble)
+
+# TODO: переворачивать списки определений при сложении слов
 
 # TODO: окно со списком всех изученных за день слов перед их повторением
 # TODO: сначала повторение слов при mode=1, затем при mode=2
