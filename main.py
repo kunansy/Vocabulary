@@ -1014,17 +1014,16 @@ class Vocabulary:
 
     def get_item_before_now(self, days_count):
         """
-        :param days_count: количество дней отступа от текущей даты
-        :return: айтем с датой, равно текущей дате - days_count
+        :param days_count: количество дней отступа от текущей даты, int > 0
+        :return: непустой айтем, чей индекс = len - days_count
         """
-        # TODO: переделать под обращение в списку по индексу
-        assert isinstance(days_count, int)
+        assert isinstance(days_count, int) and days_count > 0
 
-        item = datetime.now().date() - timedelta(days_count)
+        index = len(list(filter(len, self.list_of_days))) - days_count
 
-        assert item in self.get_date_list()
+        assert index >= 0
 
-        return self[item]
+        return list(filter(len, self.list_of_days))[index]
 
     def get_common_list(self):
         """
@@ -1347,7 +1346,7 @@ class Vocabulary:
 
 try:
     pass
-    # init_from_xlsx('1_31_2020.xlsx', 'content')
+    # init_from_xlsx('2_3_2020.xlsx', 'content')
     dictionary = Vocabulary()
     # print(dictionary.information())
     # print(dictionary('think'))
@@ -1361,10 +1360,7 @@ try:
 except Exception as trouble:
     print(trouble)
 
-# TODO: переворачивать списки определений при сложении слов
-
 # TODO: окно со списком всех изученных за день слов перед их повторением
-# TODO: сначала повторение слов при mode=1, затем при mode=2
 
 # TODO: создать SQL (?) базу данных, ноч то делать с датами?:
 #  id – слово – транскрипция – свойства – английское определение – русское определение
