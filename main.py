@@ -107,6 +107,17 @@ def first_rus_index(item):
     return list(map(lambda x: x in rus_alphabet, item)).index(True)
 
 
+def does_word_fit_with_american_spelling(word: str, by_str=True):
+    assert isinstance(word, str)
+
+    if word.endswith('e') or \
+            (word.endswith('re') and not word.endswith('ogre')) or \
+            any(i in word for i in unusual_combinations) or \
+            any(word[i] == 'l' and word[i + 1] != 'l' for i in range(len(word) - 1)):
+        return f"Вероятное, в слове '{word}' встречаются сочетания, несвойственные американской манере написания" if by_str else False
+    return "OK" if by_str else True
+
+
 def parse_str(string):
     """
     Разбирает строку на: термин, свойства, английское определение, русское, пример употребления
@@ -139,6 +150,9 @@ def parse_str(string):
     else:
         english = []
         russian = []
+
+    if any(word in i for i in english):
+        print(f"'{word.capitalize()}' встречается также и в определении, замените его на ***")
 
     return word, properties, english, russian, example
 
@@ -1370,8 +1384,6 @@ except Exception as trouble:
 
 # TODO: подогнаять размер кнопок под самый длинный айтем
 # TODO: метод быстрого чтения из гифки в ВК
-# TODO: добавить предупреждение в случае наличия несвойственных американской манере письма сочетаний
-# TODO: предупреждение, если в определении встречается изучаемое слово; заменить его на ***
 
 # TODO: парсер html – добавить возможность получать примеры употребления слов
 #  из параллельного подкоруса в составе НКРЯ, BNC или COCA

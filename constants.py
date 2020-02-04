@@ -32,3 +32,5 @@ mods = {
     'eng_def_to_rus_defs': 3,
     'rus_def_to_eng_defs': 4
 }
+
+unusual_combinations = ['ou', 'tre', 'nce', 'mm', 'ue', 'se']
