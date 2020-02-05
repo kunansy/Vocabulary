@@ -15,7 +15,7 @@ from xlrd import open_workbook
 from xlsxwriter import Workbook
 from random import shuffle, sample, choice
 from os import system, getcwd, access, F_OK
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QTextBrowser
 
 
 def str_to_date(string, swap=False):
@@ -154,6 +154,9 @@ def parse_str(string):
     if any(word in i for i in english):
         print(f"'{word.capitalize()}' встречается также и в определении, замените его на ***")
 
+    if any('.' in i or 'т. д.' in i for i in english):
+        print(f"Лишние символы в определении слова '{word}'")
+
     return word, properties, english, russian, example
 
 
@@ -203,18 +206,23 @@ def create_docx(content=[], out_file=None, header='General', russian_only=False)
     :param out_file: имя файла, если не передано – именем файла будет header
     :param header: заголовок документа
     :param russian_only: True: слово – русские опредления; False: слово – английское определение; русское
+    если файл с таким именем уже существует – не создаёт новый
     """
+    if out_file is None:
+        out_file = f"{header}.{dfile_ext}"
+
+    out_file = fix_filename(out_file, dfile_ext)
+
+    if does_file_exist(f"{docx_folder}\\{out_file}"):
+        print(f"docx file with the name '{out_file}' still exist")
+        return
+
     words = Document()
 
     style = words.styles['Normal']
     font = style.font
     font.name = 'Avenir Next Cyr'
     font.size = Pt(16)
-
-    if out_file is None:
-        out_file = f"{header}.{dfile_ext}"
-
-    out_file = fix_filename(out_file, dfile_ext)
 
     words.add_heading(f"{header}", 0)
 
@@ -245,7 +253,12 @@ def create_pdf(content=[], in_file=None, out_file=None, russian_only=False):
     если его нет – создаётся временный docx файл, по завершение выполнения функции удаляется
     :param out_file: имя файла, если не передано – именем файла будет header
     :param russian_only: True: слово – русские опредления; False: слово – английское определение; русское
+    если файл с таким именем уже существует – не создаёт новый
     """
+    if does_file_exist(fix_filename(out_file, pfile_ext)):
+        print(f"pdf file with the name '{out_file}' still exist")
+        return
+
     # нужно ли удалять файл потом
     flag = False
 
@@ -399,17 +412,17 @@ class RepeatWords(QMainWindow):
         if self.you_are_right_if(self.sender().text()):
             self.log(
                 self.word,
-                "excellent"
+                "Excellent"
             )
             if self.word.get_examples(examples_only=True):
                 self.AlertWindow.display(
-                    result='<i>excellent</i>',
+                    result='<i>Excellent</i>',
                     example=self.word.get_examples(examples_only=True, by_list=True),
                     style="color: 'green';"
                 )
             else:
                 self.MessageWindow.display(
-                    message='<i>excellent</i>',
+                    message='<i>Excellent</i>',
                     style="color: 'green';"
                 )
 
@@ -541,14 +554,15 @@ class Show(QWidget):
     def display(self, items, window_title='Show'):
         self.setWindowTitle(window_title)
 
+        words = sorted(items)
+
         self.EnglishWordsBrowser.setText(
             '\n'.join(map(
                     lambda x: f"<i><b>{x.word.capitalize()}</b></i> – {x.get_russian(def_only=True)}<br>",
-                    items
+                    words
                 )
             )
         )
-
         self.show()
 
 
@@ -994,14 +1008,22 @@ class Vocabulary:
         if list_of_days is None or len(list_of_days) == 0:
             self.list_of_days = init_vocabulary_from_file(FILENAME)[:]
         else:
+            assert isinstance(list_of_days, list) and len(list_of_days) and isinstance(list_of_days[0], WordsPerDay)
             self.list_of_days = list_of_days[:]
 
         self.graphic_name = f"{xlsx_folder}\\{gfile_name}_{self.get_date_range()}.{gfile_ext}"
 
     def get_pairs_date_count(self):
+        """
+        :return: dict{str version of the date: length of the item with that date..}
+        """
         return {i.get_date(): len(i) for i in self.list_of_days}
 
     def get_max_day(self, with_inf=False):
+        """
+        :param with_inf: True – "date: len", False – class WordsPerDay
+        :return: the biggest item by the count of the learned words
+        """
         maximum_day = max(self.list_of_days)
 
         if with_inf:
@@ -1009,6 +1031,10 @@ class Vocabulary:
         return maximum_day
 
     def get_min_day(self, with_inf=False):
+        """
+        :param with_inf: True – "date: len", False – class WordsPerDay
+        :return: the smallest item by the count of the learned words
+        """
         minimum_day = min(list(filter(lambda x: len(x) > 1, self.list_of_days)))
 
         if with_inf:
@@ -1044,24 +1070,20 @@ class Vocabulary:
 
         return f"{days_count}\n{avg_inf}\n{total_amount}\n{would_total}\n\n{min_max}"
 
-    def get_all_examples(self, examples_only=False):
-        return reduce(
-            lambda res, elem: res + [elem.get_examples(examples_only=examples_only)],
-            self.list_of_days,
-            []
-        )
-
     def get_date_list(self, by_str=False):
         """
-        :param by_str: строками или объектами date
-        :return: список дат
+        :param by_str: True – date with str, False – date by class Date
+        :return: the list of the date
         """
         if by_str:
             return list(map(lambda x: x.get_date(), self.list_of_days))
         return list(map(lambda x: x.datation, self.list_of_days))
 
     def get_date_range(self):
-        return f"{self.begin(True)}–{self.end(True)}"
+        """
+        :return: separated with '–' symbol the date of the first element and the date of the last element
+        """
+        return f"{self.begin(by_str=True)}–{self.end(by_str=True)}"
 
     def get_item_before_now(self, days_count):
         """
@@ -1078,7 +1100,7 @@ class Vocabulary:
 
     def get_common_list(self):
         """
-        :return: отсортированный общий список слов
+        :return: sorted list of the all words
         """
         return list(sorted(reduce(
             lambda result, element: result + element.get_content(),
@@ -1091,14 +1113,15 @@ class Vocabulary:
         :return: все существующие примеры из слов(*)
         """
         return reduce(
-            lambda result, element: result + element.examples_only(examples_only),
+            lambda result, element: result + element.examples_only(examples_only=examples_only),
             self.list_of_days,
             []
         )
 
     def create_xlsx(self):
         """
-        :return: создаст Excel файл со статистикой, имя файла – границы ведения дневника
+        :return: to create Excel file with statistics and graphic,
+         name of file – str version of the date of the first and the last day
         """
         if does_file_exist(self.graphic_name):
             return
@@ -1197,6 +1220,13 @@ class Vocabulary:
         workbook.close()
 
     def create_docx(self, russian_only=False):
+        """
+        :param russian_only: True – words with the only Russian definitions,
+                            False – words with all definition
+        :return: to create docx with:
+            all words in the dictionary,
+            name = date range of the dictionary
+        """
         create_docx(
             content=self.get_common_list(),
             out_file=self.get_date_range(),
@@ -1205,6 +1235,13 @@ class Vocabulary:
         )
 
     def create_pdf(self, russian_only=False):
+        """
+        :param russian_only: True – words with the only Russian definitions,
+                            False – words with all definition
+        :return: to create pdf with:
+            all words in the dictionary,
+            name = date range of the dictionary
+        """
         create_pdf(
             content=self.get_common_list(),
             in_file=self.get_date_range(),
@@ -1214,8 +1251,8 @@ class Vocabulary:
 
     def search(self, item):
         """
-        :param item: искомый элемент: строка или объект класа Word
-        :return: словарь с датой в ключе и словами из дня с этой датой в значении
+        :param item: word to search: str or Word
+        :return: dict{date: [items with the word]...}
         """
         assert len(item) > 1
         assert isinstance(item, str) or isinstance(item, Word)
@@ -1226,14 +1263,17 @@ class Vocabulary:
         return {i.get_date(): i[item] for i in filter(lambda x: item in x, self.list_of_days)}
 
     def show_graph(self):
+        """
+        :return: show graphic
+        """
         assert does_file_exist(self.graphic_name)
 
         system(self.graphic_name)
 
     def information(self):
         """
-        создаёт xlsx-файл
-        :return: строку с полной информацией о словаре и самим словарём
+        to create xslx file
+        :return: str with information about dictionary and the dictionary
         """
         self.create_xlsx()
 
@@ -1241,6 +1281,11 @@ class Vocabulary:
                f"\n{divider}\n{self.get_statistics()}"
 
     def repeat(self, day_before_now=None, date=None, **params):
+        """
+        :param day_before_now:
+        :param date: day with the date to repeat
+        :param params: additional params to RepeatWord class
+        """
         # TODO: повторение изученных 1, 3, 7, 21 день назад слов
         repeating_day = []
 
@@ -1267,32 +1312,45 @@ class Vocabulary:
 
     def remember_via_example(self, word):
         """
-        :param word: искомое слово
-        :return: пример с употреблением этого слова
+        :param word: word to remember via examples, str or Word
+        :return: examples with this word
         """
-        return self(word, by_list=True)
+        return self(word, by_example=True)
 
     def begin(self, by_str=False):
+        """
+        :param by_str: True – date by str, False – by class date
+        :return: the first day
+        """
         if by_str:
             return self.list_of_days[0].get_date()
         return self.list_of_days[0].datation
 
     def end(self, by_str=False):
+        """
+        :param by_str: True – date by str, False – by class date
+        :return: the last day
+        """
         if by_str:
             return self.list_of_days[-1].get_date()
         return self.list_of_days[-1].datation
 
     def search_by_properties(self, *properties):
+        """
+        words with these properties will be found
+        """
         return list(filter(lambda x: x.is_fit(*properties), self.get_common_list()))
 
     def how_to_say_in_russian(self):
-        return reduce(
-            lambda res, elem: res + elem.get_words_list(),
-            self.list_of_days,
-            []
-        )
+        """
+        :return: ony English words
+        """
+        return list(map(lambda x: x.word, self.get_common_list()))
 
     def how_to_say_in_english(self):
+        """
+        :return: only Russian definition of the words
+        """
         return reduce(
             lambda res, elem: res + elem.russian_only(def_only=True),
             self.list_of_days,
@@ -1301,8 +1359,8 @@ class Vocabulary:
 
     def __contains__(self, item):
         """
-        :param item: искомое слово строкой или объектом класса Word
-        :return: содержится ли такое слово в словаре
+        :param item: words to find, str or Word
+        :return: does this word in the Vocabulary
         """
         if isinstance(item, str):
             return any(item.lower().strip() in i for i in self.list_of_days)
@@ -1311,7 +1369,7 @@ class Vocabulary:
 
     def __len__(self):
         """
-        :return: общее количество слов в словаре
+        :return: overall amount of the words
         """
         return sum(len(i) for i in self.list_of_days)
 
@@ -1320,8 +1378,8 @@ class Vocabulary:
 
     def __getitem__(self, item):
         """
-        :param item: дату строкой, классом date или срезом
-        :return: айтем с соответствующей датой
+        :param item: date by str, date or slice
+        :return: element with that date
         """
         item = str_to_date(item) if isinstance(item, str) else item
         
@@ -1354,14 +1412,13 @@ class Vocabulary:
     def __call__(self, desired_word, **kwargs):
         """
         :param desired_word: words to search
-        :param kwargs: дополнительные параметры:
-            :param by_def: ищет по определениям либо при указании этого параметра True,
-            либо при введении русского слова в поиск
+        :param kwargs: additional params:
+            :param by_def: True – search for the word in defs, False – not
+            if there is any Russian symbol – search in defs too
             :param by_example: ищёт слово в примерах(*)
-        :return: строку с результатами, объединённую символом '\n'
+        :return: joined with '\n' result string
         """
-        # TODO
-        up_word = lambda string, item: ' '.join(i if item not in i else i.upper() for i in string.split())
+        up_word = lambda string, item: ' '.join(i.upper() if item.replace('–', '').strip() in i else i for i in string.split())
 
         in_def = lambda string, item: string[:dash(string)] + up_word(string[dash(string):], item)
         dash = lambda x: x.index('–')
@@ -1389,7 +1446,7 @@ class Vocabulary:
 
     def __str__(self):
         """
-        :return: string version of te Vocabulary and information about it
+        :return: string version of the Vocabulary and information about it
         """
         return f"{self.information()}\n{divider}\n" + \
                f"\n{divider}\n\n".join(map(str, self.list_of_days))
@@ -1399,6 +1456,7 @@ try:
     pass
     # init_from_xlsx('2_3_2020.xlsx', 'content')
     dictionary = Vocabulary()
+    print(dictionary('want', by_def=True))
     # print(dictionary.information())
     # print(dictionary('fulfil'))
 
@@ -1406,10 +1464,11 @@ try:
     # shuffle(eng)
     # create_pdf(eng, out_file='How to say in it Russian')
 
-    dictionary.repeat(date='31.1.2020', mode=1)
-    # dictionary.repeat(date='31.1.2020', mode=2)
+    # dictionary.repeat(day_before_now=1, mode=1)
 except Exception as trouble:
     print(trouble)
+
+# TODO: проверять наличие даты в словаре при помощи <=> относительно границ
 
 # TODO: создать SQL (?) базу данных, ноч то делать с датами?:
 #  id – слово – транскрипция – свойства – английское определение – русское определение
