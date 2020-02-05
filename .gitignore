@@ -4,6 +4,7 @@
 *.pyc
 *.mp3
 *.m4a
+Repeating of the learned words
 
 .idea/
 __pycache__/
