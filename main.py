@@ -190,7 +190,7 @@ def init_from_xlsx(filename, out='tmp'):
     result = [reduce(lambda res, elem: res + elem, list(group[1]), Word('')) for group in value]
 
     # файл, скачанный из Cambridge Dictionary, содержит дату в английском формате
-    filename = filename.replace(f".{gfile_ext}", '')
+    filename = filename.replace(f".{table_file_ext}", '')
     date = str_to_date(filename, swap=True).strftime(DATEFORMAT)
 
     print(f"\n\n[{date}]", file=file_out)
@@ -209,9 +209,9 @@ def create_docx(content=[], out_file=None, header='General', russian_only=False)
     если файл с таким именем уже существует – не создаёт новый
     """
     if out_file is None:
-        out_file = f"{header}.{dfile_ext}"
+        out_file = f"{header}.{doc_file_ext}"
 
-    out_file = fix_filename(out_file, dfile_ext)
+    out_file = fix_filename(out_file, doc_file_ext)
 
     if does_file_exist(f"{docx_folder}\\{out_file}"):
         print(f"docx file with the name '{out_file}' still exist")
@@ -255,7 +255,7 @@ def create_pdf(content=[], in_file=None, out_file=None, russian_only=False):
     :param russian_only: True: слово – русские опредления; False: слово – английское определение; русское
     если файл с таким именем уже существует – не создаёт новый
     """
-    if does_file_exist(fix_filename(out_file, pfile_ext)):
+    if does_file_exist(fix_filename(out_file, pdf_file_ext)):
         print(f"pdf file with the name '{out_file}' still exist")
         return
 
@@ -263,14 +263,14 @@ def create_pdf(content=[], in_file=None, out_file=None, russian_only=False):
     flag = False
 
     if in_file is None or not \
-            (does_file_exist(fix_filename(in_file, dfile_ext)) or
-             does_file_exist(f"{docx_folder}\\{fix_filename(in_file, dfile_ext)}")):
+            (does_file_exist(fix_filename(in_file, doc_file_ext)) or
+             does_file_exist(f"{docx_folder}\\{fix_filename(in_file, doc_file_ext)}")):
         flag = True
-        in_file = f"temp.{dfile_ext}"
+        in_file = f"temp.{doc_file_ext}"
         create_docx(content, out_file=in_file, russian_only=russian_only)
 
-    in_file = fix_filename(in_file, dfile_ext)
-    out_file = fix_filename(out_file, pfile_ext)
+    in_file = fix_filename(in_file, doc_file_ext)
+    out_file = fix_filename(out_file, pdf_file_ext)
 
     word = comtypes.client.CreateObject('Word.Application')
     doc = word.Documents.Open(f"{getcwd()}\\{docx_folder}\\{in_file}")
@@ -1011,7 +1011,7 @@ class Vocabulary:
             assert isinstance(list_of_days, list) and len(list_of_days) and isinstance(list_of_days[0], WordsPerDay)
             self.list_of_days = list_of_days[:]
 
-        self.graphic_name = f"{xlsx_folder}\\{gfile_name}_{self.get_date_range()}.{gfile_ext}"
+        self.graphic_name = f"{xlsx_folder}\\{gfile_name}_{self.get_date_range()}.{doc_file_ext}"
 
     def get_pairs_date_count(self):
         """
@@ -1456,13 +1456,8 @@ try:
     pass
     # init_from_xlsx('2_3_2020.xlsx', 'content')
     dictionary = Vocabulary()
-    print(dictionary('want', by_def=True))
     # print(dictionary.information())
     # print(dictionary('fulfil'))
-
-    # eng = dictionary.how_to_say_in_russian()
-    # shuffle(eng)
-    # create_pdf(eng, out_file='How to say in it Russian')
 
     # dictionary.repeat(day_before_now=1, mode=1)
 except Exception as trouble:

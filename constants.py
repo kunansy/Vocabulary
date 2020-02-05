@@ -5,9 +5,10 @@ FILENAME = 'content'
 gfile_name = 'graph'
 sheet_name = 'Graphic'
 
-gfile_ext = 'xlsx'
-dfile_ext = 'docx'
-pfile_ext = 'pdf'
+table_file_ext = 'xlsx'
+doc_file_ext = 'docx'
+pdf_file_ext = 'pdf'
+db_file_ext = 'db'
 
 docx_folder = 'docx'
 xlsx_folder = 'xlsx'
