@@ -26,7 +26,7 @@ MainRepeatWindow = 'ui\\MainWindow.ui'
 AlertWindow = 'ui\\AlertWindow.ui'
 MessageWindow = 'ui\\MessageWindow.ui'
 ShowWindow = 'ui\\ShowWindow.ui'
-log_filename = 'Repeating of the learned words'
+log_filename = 'Repeating_of_the_learned_words'
 
 mods = {
     'eng_word_to_rus_defs': 1,

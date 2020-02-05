@@ -15,7 +15,7 @@ from xlrd import open_workbook
 from xlsxwriter import Workbook
 from random import shuffle, sample, choice
 from os import system, getcwd, access, F_OK
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QTextBrowser
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
 
 
 def str_to_date(string, swap=False):
@@ -136,7 +136,7 @@ def parse_str(string):
     example = []
     if 'Example: ' in other:
         ex_index = other.index('Example: ')
-        example = [other[ex_index + 8:]]
+        example = list(filter(len, map(str.strip, other[ex_index + 8:].split(';'))))
         other = other[:ex_index]
 
     if other:
@@ -152,10 +152,10 @@ def parse_str(string):
         russian = []
 
     if any(word in i for i in english):
-        print(f"'{word.capitalize()}' встречается также и в определении, замените его на ***")
+        print(f"'{word.capitalize()}' is situated in the definition too. It is recommended to replace it on ***")
 
     if any('.' in i or 'т. д.' in i for i in english):
-        print(f"Лишние символы в определении слова '{word}'")
+        print(f"There is wrong symbol in the definition of the word '{word}'")
 
     return word, properties, english, russian, example
 
@@ -416,6 +416,7 @@ class RepeatWords(QMainWindow):
             )
             if self.word.get_examples(examples_only=True):
                 self.AlertWindow.display(
+                    word=self.word,
                     result='<i>Excellent</i>',
                     example=self.word.get_examples(examples_only=True, by_list=True),
                     style="color: 'green';"
@@ -443,6 +444,7 @@ class RepeatWords(QMainWindow):
 
             if self.word.get_examples(examples_only=True):
                 self.AlertWindow.display(
+                    word=self.word,
                     result='<b>Wrong</b>',
                     example=self.word.get_examples(examples_only=True, by_list=True),
                     style="color: 'red';"
@@ -456,8 +458,9 @@ class RepeatWords(QMainWindow):
     def hint(self):
         if self.word.get_examples(examples_only=True):
             self.AlertWindow.display(
-                f"{self.HintButton.text()}",
-                self.word.get_examples(examples_only=True),
+                word=self.word,
+                result=f"{self.HintButton.text()}",
+                example=self.word.get_examples(examples_only=True, by_list=True),
                 style="color: blue"
             )
 
@@ -484,7 +487,7 @@ class RepeatWords(QMainWindow):
             temp.close()
 
         if len(w_choice) > 0:
-            w_choice = f", выбранный вариант: '{w_choice}'"
+            w_choice = f", chosen variant: '{w_choice}'"
 
         content = open(self.filename, 'r').readlines()
 
@@ -513,7 +516,7 @@ class Alert(QWidget):
         self.Result.setText('')
         self.Examples.setText('')
 
-    def display(self, result, example, style=''):
+    def display(self, word, result, example, style=''):
         self.Result.setText(result)
 
         if style:
@@ -521,8 +524,9 @@ class Alert(QWidget):
 
         assert len(example) > 0
 
-        # TODO: bold the word
-        self.Examples.setText('\n'.join(map(lambda x: f"{x[0]}. {x[1]}", enumerate(example, 1))))
+        bold_word = lambda string, word: ' '.join(f"<b>{i}</b>" if word.lower() in i.lower() else i for i in string.split())
+
+        self.Examples.setText('\n'.join(map(lambda x: f"{x[0]}. {bold_word(x[1], word.word)}<br>", enumerate(example, 1))))
 
         self.show()
 
@@ -632,6 +636,7 @@ class Word:
         assert isinstance(properties, str) or isinstance(properties, Properties)
         assert isinstance(english_def, list) or isinstance(english_def, str)
         assert isinstance(russian_def, list) or isinstance(russian_def, str)
+        assert isinstance(example, list) or isinstance(example, str)
 
         if ' – ' in word:
             self.__init__(*parse_str(word))
@@ -1456,10 +1461,11 @@ try:
     pass
     # init_from_xlsx('2_3_2020.xlsx', 'content')
     dictionary = Vocabulary()
-    # print(dictionary.information())
-    # print(dictionary('fulfil'))
 
-    # dictionary.repeat(day_before_now=1, mode=1)
+    # print(dictionary.information())
+    # print(dictionary('occur'))
+
+    # dictionary.repeat(date='7.12.2019', mode=1)
 except Exception as trouble:
     print(trouble)
 
