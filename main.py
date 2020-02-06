@@ -193,6 +193,7 @@ def init_from_xlsx(
     :param filename: имя xlsx файла
     :param out: имя файла, в который будет выведен список слов формата Word, по умолчанию – tmp
     """
+    # TODO: если такая дата уже есть в файле – заверщать работу функции
     assert does_file_exist(filename), \
         f"File with name '{filename}' does not exist, " \
         f"func – init_from_xlsx"
@@ -1703,17 +1704,21 @@ class Vocabulary:
 
 try:
     pass
-    # init_from_xlsx('2_3_2020.xlsx', 'content')
+    # init_from_xlsx('2_6_2020.xlsx', 'content')
     dictionary = Vocabulary()
 
     # print(dictionary.information())
-    # print(dictionary('occur'))
+    # print(dictionary('возбуж'))
 
     # dictionary.repeat(date='7.12.2019', mode=1)
 except Exception as trouble:
     print(trouble)
 
 # TODO: проверять наличие даты в словаре при помощи <=> относительно границ
+
+# TODO: сделать все функци выполняющими только одну поставленную задачу
+
+# TODO: если даты нет и она в нужном диапазоне – день пуст
 
 # TODO: создать SQL (?) базу данных, ноч то делать с датами?:
 #  id – слово – транскрипция – свойства – английское определение – русское определение
