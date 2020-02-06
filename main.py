@@ -170,10 +170,11 @@ def parse_str(string):
         english = []
         russian = []
 
-    if any(word in i for i in english):
+    # TODO: work with expressions
+    if any(word.lower() in i.split() for i in english):
         print(f"'{word.capitalize()}' is situated in the definition too. It is recommended to replace it on ***")
 
-    if any('.' in i or 'т. д.' in i for i in english):
+    if any('.' in i for i in english):
         print(f"There is wrong symbol in the definition of the word '{word}'")
 
     return word, properties, english, russian, example
@@ -241,7 +242,6 @@ def create_docx(
         out_file = f"{header}.{doc_file_ext}"
 
     out_file = fix_filename(out_file, doc_file_ext)
-
     if does_file_exist(f"{docx_folder}\\{out_file}"):
         print(f"docx file with the name '{out_file}' still exist")
         return
