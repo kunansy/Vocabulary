@@ -18,7 +18,10 @@ from os import system, getcwd, access, F_OK
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
 
 
-def str_to_date(string, swap=False):
+def str_to_date(
+        string,
+        swap=False
+):
     """
     :param string: строку формата dd.mm.yy
     :param: swap: менять ли местами день и месяц
@@ -66,7 +69,10 @@ def init_vocabulary_from_file(filename=FILENAME):
     return words_per_day
 
 
-def fix_filename(name, extension):
+def fix_filename(
+        name,
+        extension
+):
     """
     :param name: имя файла
     :param extension: расширение файла
@@ -75,7 +81,10 @@ def fix_filename(name, extension):
     return name if name.endswith(f".{extension}") else f"{name}.{extension}"
 
 
-def clean_date(date, split_symbol='.'):
+def clean_date(
+        date,
+        split_symbol='.'
+):
     """
     :param date: str, date
     :return: str, looks like '01.01.1970'
@@ -107,7 +116,10 @@ def first_rus_index(item):
     return list(map(lambda x: x in rus_alphabet, item)).index(True)
 
 
-def does_word_fit_with_american_spelling(word: str, by_str=True):
+def does_word_fit_with_american_spelling(
+        word: str,
+        by_str=True
+):
     assert isinstance(word, str)
 
     if word.endswith('e') or \
@@ -160,7 +172,10 @@ def parse_str(string):
     return word, properties, english, russian, example
 
 
-def init_from_xlsx(filename, out='tmp'):
+def init_from_xlsx(
+        filename,
+        out='tmp'
+):
     """
     Функция преобразует xlsx файл в список объектов класса Word,
     выводит их в файл, вывод осуществляется с дополнением старого содержимого:
@@ -200,7 +215,12 @@ def init_from_xlsx(filename, out='tmp'):
     file_out.close()
 
 
-def create_docx(content=[], out_file=None, header='General', russian_only=False):
+def create_docx(
+        content=[],
+        out_file=None,
+        header='General',
+        russian_only=False
+):
     """
     :param content: список объектов класса Word, которые будут выведены в файл
     :param out_file: имя файла, если не передано – именем файла будет header
@@ -246,7 +266,12 @@ def create_docx(content=[], out_file=None, header='General', russian_only=False)
     words.save(f"{getcwd()}\\{docx_folder}\\{out_file}")
 
 
-def create_pdf(content=[], in_file=None, out_file=None, russian_only=False):
+def create_pdf(
+        content=[],
+        in_file=None,
+        out_file=None,
+        russian_only=False
+):
     """
     :param content: список объектов класса Word, которые будут выведены в файл
     :param in_file: имя входного файла docx, который будет преобразован в pdf
@@ -297,7 +322,13 @@ def word_id(item):
 
 
 class RepeatWords(QMainWindow):
-    def __init__(self, words, mode=1, filename=log_filename, window_title='Repeat'):
+    def __init__(
+            self,
+            words,
+            mode=1,
+            filename=log_filename,
+            window_title='Repeat'
+    ):
         super().__init__()
         uic.loadUi(MainRepeatWindow, self)
 
@@ -339,7 +370,10 @@ class RepeatWords(QMainWindow):
         # имя файла, в который будут логгироваться результаты
         self.filename = filename
 
-    def initUI(self, window_title):
+    def initUI(
+            self,
+            window_title
+    ):
         self.AlertWindow = Alert(self, [])
         self.MessageWindow = Message(self, [])
         self.ShowWindow = Show(self, [])
@@ -477,7 +511,12 @@ class RepeatWords(QMainWindow):
         self.ShowWindow.close()
         super().close()
 
-    def log(self, word, result, w_choice=''):
+    def log(
+            self,
+            word,
+            result,
+            w_choice=''
+    ):
         """
         :param word: слово и результат
         :return: логгирование в файл
@@ -516,7 +555,14 @@ class Alert(QWidget):
         self.Result.setText('')
         self.Examples.setText('')
 
-    def display(self, word, result, example, style=''):
+    # TODO: right type of the world
+    def display(
+            self,
+            word,
+            result,
+            example,
+            style=''
+    ):
         self.Result.setText(result)
 
         if style:
@@ -542,7 +588,11 @@ class Message(QWidget):
         self.setWindowTitle('Alert')
         self.MessageText.setText('')
 
-    def display(self, message, style=''):
+    def display(
+            self,
+            message,
+            style=''
+    ):
         if style:
             self.MessageText.setStyleSheet(style)
 
@@ -555,7 +605,11 @@ class Show(QWidget):
         super().__init__()
         uic.loadUi(ShowWindow, self)
 
-    def display(self, items, window_title='Show'):
+    def display(
+            self,
+            items,
+            window_title='Show'
+    ):
         self.setWindowTitle(window_title)
 
         words = sorted(items)
@@ -571,7 +625,10 @@ class Show(QWidget):
 
 
 class Properties:
-    def __init__(self, properties: str):
+    def __init__(
+            self,
+            properties: str
+    ):
         # TODO
         assert isinstance(properties, str) or isinstance(properties, list) or isinstance(properties, dict)
         self.properties = {}
@@ -623,7 +680,14 @@ class Properties:
 
 
 class Word:
-    def __init__(self, word='', properties='', english_def=[], russian_def=[], example=[]):
+    def __init__(
+            self,
+            word='',
+            properties='',
+            english_def=[],
+            russian_def=[],
+            example=[]
+    ):
         """
         :param word: english word to learn
         :param properties: POS, language level, formal, ancient,
@@ -664,7 +728,11 @@ class Word:
 
             self.id = word_id(self.word)
 
-    def get_russian(self, def_only=False, by_list=False):
+    def get_russian(
+            self,
+            def_only=False,
+            by_list=False
+    ):
         """
         Вовзращает русские определения
         :param def_only: True – только определения, False – термин и определения
@@ -676,7 +744,11 @@ class Word:
             return '; '.join(self.russian)
         return f"{self.word} – {'; '.join(self.russian)}".capitalize()
 
-    def get_english(self, def_only=False, by_list=False):
+    def get_english(
+            self,
+            def_only=False,
+            by_list=False
+    ):
         """
         Возвращает английские определения
         :param def_only: True – только определения, False – термин и определения
@@ -688,7 +760,11 @@ class Word:
             return '; '.join(self.english)
         return f"{self.word} – {'; '.join(self.english)}".capitalize()
 
-    def get_examples(self, examples_only=False, by_list=False):
+    def get_examples(
+            self,
+            examples_only=False,
+            by_list=False
+    ):
         """
         Возвращает примеры
         :param def_only: True – только примеры, False – термин и примеры
@@ -703,10 +779,16 @@ class Word:
     def word_id(self):
         return self.id if self.id else word_id(self.word)
 
-    def is_fit(self, *properties):
+    def is_fit(
+            self,
+            *properties
+    ):
         return all(self.properties[i] for i in properties)
 
-    def __getitem__(self, index: int):
+    def __getitem__(
+            self,
+            index: int
+    ):
         """
         :param index: int value
         :return: the letter under the index
@@ -845,7 +927,10 @@ class Word:
 
 
 class WordsPerDay:
-    def __init__(self, content: list, datation):
+    def __init__(
+            self,
+            content: list,
+            datation):
         """
         :param content: список объектов класса Word
         :param date: дата изучения
@@ -853,7 +938,10 @@ class WordsPerDay:
         self.datation = str_to_date(datation)
         self.content = list(sorted(content))
 
-    def russian_only(self, def_only=False):
+    def russian_only(
+            self,
+            def_only=False
+    ):
         """
         :param def_only: return words with its definitions or not
         :return: the list of the words with its Russian definitions, the day contains
@@ -864,7 +952,10 @@ class WordsPerDay:
             []
         )
 
-    def english_only(self, def_only=False):
+    def english_only(
+            self,
+            def_only=False
+    ):
         """
         :param def_only: return words with its definitions or not
         :return: the list of the words with its English definitions, the day contains
@@ -875,7 +966,10 @@ class WordsPerDay:
             []
         )
 
-    def examples_only(self, examples_only=False):
+    def examples_only(
+            self,
+            examples_only=False
+    ):
         res = reduce(
             lambda res, elem: res + [elem.get_examples(examples_only)], 
             self.content, 
@@ -884,7 +978,11 @@ class WordsPerDay:
         
         return list(filter(len, res))
 
-    def get_words_list(self, with_eng=False, with_rus=False):
+    def get_words_list(
+            self,
+            with_eng=False,
+            with_rus=False
+    ):
         """
         :param with_eng: return words with English its definitions or not
         :param with_rus: return words with its Russian definitions or not
@@ -906,20 +1004,29 @@ class WordsPerDay:
     def get_content(self):
         return self.content[:]
 
-    def get_examples(self, examples_only=False):
+    def get_examples(
+            self,
+            examples_only=False
+    ):
         return reduce(
             lambda res, elem: res + [elem.get_examples(examples_only=examples_only)],
             self.content,
             []
         )
 
-    def get_date(self, dateformat=DATEFORMAT):
+    def get_date(
+            self,
+            dateformat=DATEFORMAT
+    ):
         return self.datation.strftime(dateformat)
 
     def get_information(self):
         return f"{self.get_date()}\n{len(self)}"
 
-    def repeat(self, **params):
+    def repeat(
+            self,
+            **params
+    ):
         app = QApplication(argv)
 
         repeat = RepeatWords(
@@ -932,14 +1039,20 @@ class WordsPerDay:
 
         exit(app.exec_())
 
-    def create_docx(self, russian_only=False):
+    def create_docx(
+            self,
+            russian_only=False
+    ):
         create_docx(
             self.content, 
             header=self.get_date(), 
             russian_only=russian_only
         )
 
-    def create_pdf(self, russian_only=False):
+    def create_pdf(
+            self,
+            russian_only=False
+    ):
         create_pdf(
             self.content, 
             out_file=self.get_date(), 
@@ -1009,7 +1122,10 @@ class WordsPerDay:
 
 
 class Vocabulary:
-    def __init__(self, list_of_days=None):
+    def __init__(
+            self,
+            list_of_days=None
+    ):
         if list_of_days is None or len(list_of_days) == 0:
             self.list_of_days = init_vocabulary_from_file(FILENAME)[:]
         else:
@@ -1024,7 +1140,10 @@ class Vocabulary:
         """
         return {i.get_date(): len(i) for i in self.list_of_days}
 
-    def get_max_day(self, with_inf=False):
+    def get_max_day(
+            self,
+            with_inf=False
+    ):
         """
         :param with_inf: True – "date: len", False – class WordsPerDay
         :return: the biggest item by the count of the learned words
@@ -1035,7 +1154,10 @@ class Vocabulary:
             return f"Maximum day {maximum_day.get_date()}: {len(maximum_day)}"
         return maximum_day
 
-    def get_min_day(self, with_inf=False):
+    def get_min_day(
+            self,
+            with_inf=False
+    ):
         """
         :param with_inf: True – "date: len", False – class WordsPerDay
         :return: the smallest item by the count of the learned words
@@ -1075,7 +1197,10 @@ class Vocabulary:
 
         return f"{days_count}\n{avg_inf}\n{total_amount}\n{would_total}\n\n{min_max}"
 
-    def get_date_list(self, by_str=False):
+    def get_date_list(
+            self,
+            by_str=False
+    ):
         """
         :param by_str: True – date with str, False – date by class Date
         :return: the list of the date
@@ -1090,7 +1215,10 @@ class Vocabulary:
         """
         return f"{self.begin(by_str=True)}–{self.end(by_str=True)}"
 
-    def get_item_before_now(self, days_count):
+    def get_item_before_now(
+            self,
+            days_count
+    ):
         """
         :param days_count: количество дней отступа от текущей даты, int > 0
         :return: непустой айтем, чей индекс = len - days_count
@@ -1113,7 +1241,10 @@ class Vocabulary:
             []
         )))
 
-    def get_examples(self, examples_only=False):
+    def get_examples(
+            self,
+            examples_only=False
+    ):
         """
         :return: все существующие примеры из слов(*)
         """
@@ -1224,7 +1355,10 @@ class Vocabulary:
 
         workbook.close()
 
-    def create_docx(self, russian_only=False):
+    def create_docx(
+            self,
+            russian_only=False
+    ):
         """
         :param russian_only: True – words with the only Russian definitions,
                             False – words with all definition
@@ -1239,7 +1373,10 @@ class Vocabulary:
             russian_only=russian_only
         )
 
-    def create_pdf(self, russian_only=False):
+    def create_pdf(
+            self,
+            russian_only=False
+    ):
         """
         :param russian_only: True – words with the only Russian definitions,
                             False – words with all definition
@@ -1254,7 +1391,10 @@ class Vocabulary:
             russian_only=russian_only
         )
 
-    def search(self, item):
+    def search(
+            self,
+            item
+    ):
         """
         :param item: word to search: str or Word
         :return: dict{date: [items with the word]...}
@@ -1285,7 +1425,12 @@ class Vocabulary:
         return '\n'.join(map(lambda day_count: f"{day_count[0]}: {day_count[1]}", self.get_pairs_date_count().items())) + \
                f"\n{divider}\n{self.get_statistics()}"
 
-    def repeat(self, day_before_now=None, date=None, **params):
+    def repeat(
+            self,
+            day_before_now=None,
+            date=None,
+            **params
+    ):
         """
         :param day_before_now:
         :param date: day with the date to repeat
@@ -1315,14 +1460,20 @@ class Vocabulary:
 
         exit(app.exec_())
 
-    def remember_via_example(self, word):
+    def remember_via_example(
+            self,
+            word
+    ):
         """
         :param word: word to remember via examples, str or Word
         :return: examples with this word
         """
         return self(word, by_example=True)
 
-    def begin(self, by_str=False):
+    def begin(
+            self,
+            by_str=False
+    ):
         """
         :param by_str: True – date by str, False – by class date
         :return: the first day
@@ -1331,7 +1482,10 @@ class Vocabulary:
             return self.list_of_days[0].get_date()
         return self.list_of_days[0].datation
 
-    def end(self, by_str=False):
+    def end(
+            self,
+            by_str=False
+    ):
         """
         :param by_str: True – date by str, False – by class date
         :return: the last day
@@ -1340,7 +1494,10 @@ class Vocabulary:
             return self.list_of_days[-1].get_date()
         return self.list_of_days[-1].datation
 
-    def search_by_properties(self, *properties):
+    def search_by_properties(
+            self,
+            *properties
+    ):
         """
         words with these properties will be found
         """
@@ -1362,7 +1519,10 @@ class Vocabulary:
             []
         )
 
-    def __contains__(self, item):
+    def __contains__(
+            self,
+            item
+    ):
         """
         :param item: words to find, str or Word
         :return: does this word in the Vocabulary
@@ -1381,7 +1541,10 @@ class Vocabulary:
     def __bool__(self):
         return bool(len(self.list_of_days))
 
-    def __getitem__(self, item):
+    def __getitem__(
+            self,
+            item
+    ):
         """
         :param item: date by str, date or slice
         :return: element with that date
@@ -1414,7 +1577,11 @@ class Vocabulary:
     def __iter__(self):
         return iter(self.list_of_days)
 
-    def __call__(self, desired_word, **kwargs):
+    def __call__(
+            self,
+            desired_word,
+            **kwargs
+    ):
         """
         :param desired_word: words to search
         :param kwargs: additional params:
