@@ -198,6 +198,15 @@ def init_from_xlsx(
         f"File with name '{filename}' does not exist, " \
         f"func – init_from_xlsx"
 
+    # файл, скачанный из Cambridge Dictionary, содержит дату в английском формате
+    date = str_to_date(filename.replace(f".{table_file_ext}", ''), swap=True).strftime(DATEFORMAT)
+
+    content = open(out, 'r', encoding='utf-8').readlines()
+
+    assert f"[{date}]\n" not in content, \
+        f"The date '{date}' is currently exist in the '{out}' file, " \
+        f"func – init_from_xlsx"
+
     rb = open_workbook(filename)
     sheet = rb.sheet_by_index(0)
 
@@ -214,10 +223,6 @@ def init_from_xlsx(
 
     # суммирование одинаковых слов в один объект класса Word
     result = [reduce(lambda res, elem: res + elem, list(group[1]), Word('')) for group in value]
-
-    # файл, скачанный из Cambridge Dictionary, содержит дату в английском формате
-    filename = filename.replace(f".{table_file_ext}", '')
-    date = str_to_date(filename, swap=True).strftime(DATEFORMAT)
 
     print(f"\n\n[{date}]", file=file_out)
     print(*result, sep='\n', file=file_out)
@@ -1704,13 +1709,13 @@ class Vocabulary:
 
 try:
     pass
-    # init_from_xlsx('2_6_2020.xlsx', 'content')
-    dictionary = Vocabulary()
+    init_from_xlsx('1_1_2020.xlsx', 'content')
+    # dictionary = Vocabulary()
 
     # print(dictionary.information())
     # print(dictionary('возбуж'))
 
-    # dictionary.repeat(date='7.12.2019', mode=1)
+    # dictionary.repeat(date='6.2.2020', mode=1)
 except Exception as trouble:
     print(trouble)
 
