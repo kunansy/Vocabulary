@@ -56,7 +56,9 @@ def init_vocabulary_from_file(filename=FILENAME):
     :param filename: имя файла, где хранятся данные
     :return: список WordsPerDay
     """
-    assert does_file_exist(filename)
+    assert does_file_exist(filename), \
+        f"The file with name '{filename}', does not exist, " \
+        "func – init_vocabulary_from_file"
 
     with open(filename, 'r', encoding='utf-8') as file:
         content = file.readlines()
@@ -95,8 +97,10 @@ def clean_date(
 
 
 def language(item: str):
-    # TODO: speed up
-    assert isinstance(item, str)
+    # TODO: speed up: C++ or NumPy, CPython etc
+    assert isinstance(item, str), \
+        f"Wrong item type: '{type(item)}', '{item}', " \
+        f"func – language"
 
     if any(i in rus_alphabet for i in item):
         return 'rus'
@@ -120,8 +124,11 @@ def does_word_fit_with_american_spelling(
         word: str,
         by_str=True
 ):
-    assert isinstance(word, str)
+    assert isinstance(word, str), \
+        f"Wrong type of the word: '{type(word)}', '{word}', " \
+        f"func – does_word_fit_with_american_spelling"
 
+    # TODO: to correct style
     if word.endswith('e') or \
             (word.endswith('re') and not word.endswith('ogre')) or \
             any(i in word for i in unusual_combinations) or \
@@ -185,7 +192,9 @@ def init_from_xlsx(
     :param filename: имя xlsx файла
     :param out: имя файла, в который будет выведен список слов формата Word, по умолчанию – tmp
     """
-    assert does_file_exist(filename)
+    assert does_file_exist(filename), \
+        f"File with name '{filename}' does not exist, " \
+        f"func – init_from_xlsx"
 
     rb = open_workbook(filename)
     sheet = rb.sheet_by_index(0)
@@ -313,7 +322,9 @@ def word_id(item):
     :param item: слово: слока или объект класса Word
     :return: первые и последние четыре символа sha3_512 хеша этого слова
     """
-    assert isinstance(item, str) or isinstance(item, Word)
+    assert isinstance(item, str) or isinstance(item, Word), \
+        f"Wrong type of the word: '{type(item)}', '{item}', " \
+        f"func – word_id"
 
     word = item if isinstance(item, str) else item.word
 
@@ -340,10 +351,16 @@ class RepeatWords(QMainWindow):
         self.init_button = None
 
         if isinstance(mode, int):
-            assert mode in range(1, 5)
+            assert mode in range(1, 5), \
+                f"Wrong mode value '{mode}', " \
+                f"func – RepeatWords.__init__"
+
             self.mode = mode
         elif isinstance(mode, str):
-            assert mode in mods
+            assert mode in mods, \
+                f"Mode '{mode}' does not support, " \
+                f"func – RepeatWords.__init__"
+
             self.mode = mods[mode]
         else:
             raise TypeError(f"Wrong mode type: '{mode}', {type(mode)}, correct int or str expected")
@@ -568,7 +585,9 @@ class Alert(QWidget):
         if style:
             self.Result.setStyleSheet(style)
 
-        assert len(example) > 0
+        assert len(example) > 0, \
+            f"Wrong example: '{example}', choose the Message window instead of the Alert one, " \
+            f"func – Alert.display"
 
         bold_word = lambda string, word: ' '.join(f"<b>{i}</b>" if word.lower() in i.lower() else i for i in string.split())
 
@@ -625,12 +644,17 @@ class Show(QWidget):
 
 
 class Properties:
+    # TODO
     def __init__(
             self,
             properties: str
     ):
-        # TODO
-        assert isinstance(properties, str) or isinstance(properties, list) or isinstance(properties, dict)
+        assert isinstance(properties, str) or \
+               isinstance(properties, list) or \
+               isinstance(properties, dict), \
+            f"Wrong type of properties: '{type(properties)}', '{properties}', " \
+            f"func – Properties.__init__"
+
         self.properties = {}
 
         if isinstance(properties, dict):
@@ -696,11 +720,30 @@ class Word:
         :param russian_def: russian definitions of the word (maybe don't exist): list
         :param example: examples of the word using
         """
-        assert isinstance(word, str)
-        assert isinstance(properties, str) or isinstance(properties, Properties)
-        assert isinstance(english_def, list) or isinstance(english_def, str)
-        assert isinstance(russian_def, list) or isinstance(russian_def, str)
-        assert isinstance(example, list) or isinstance(example, str)
+        assert isinstance(word, str), \
+            f"Wrong word type: '{type(word)}', '{word}', " \
+            f"func – Word.__init__"
+
+        assert isinstance(properties, str) or \
+               isinstance(properties, Properties) or \
+               isinstance(properties, dict), \
+            f"Wrong properties type '{type(properties)}', '{properties}', " \
+            f"func – Word.__init__"
+
+        assert isinstance(english_def, list) or \
+               isinstance(english_def, str), \
+            f"Wrong english_def type '{type(english_def)}', '{english_def}', " \
+            f"func – Word.__init__"
+
+        assert isinstance(russian_def, list) or \
+               isinstance(russian_def, str), \
+            f"Wrong russian_def type '{type(russian_def)}', '{russian_def}', " \
+            f"func – Word.__init__"
+
+        assert isinstance(example, list) or \
+               isinstance(example, str), \
+            f"Wrong example type {type(example)}, '{example}', " \
+            f"func – Word.__init__"
 
         if ' – ' in word:
             self.__init__(*parse_str(word))
@@ -793,7 +836,10 @@ class Word:
         :param index: int value
         :return: the letter under the index
         """
-        assert isinstance(index, int) and len(self.word) >= abs(index)
+        assert isinstance(index, int) and \
+               len(self.word) >= abs(index), \
+            f"Wrong index type or value '{type(index)}', '{index}', " \
+            f"func – Word.__getitem__"
 
         return self.word[index]
 
@@ -1079,7 +1125,10 @@ class WordsPerDay:
         :param item: word or its diff
         :return: does it exist here?
         """
-        assert isinstance(item, str) or isinstance(item, Word)
+        assert isinstance(item, str) or \
+               isinstance(item, Word), \
+            f"Wrong item type '{type(item)}', " \
+            f"func – WordsPerDay.__contains__"
 
         return any(item in i for i in self.content)
 
@@ -1129,7 +1178,13 @@ class Vocabulary:
         if list_of_days is None or len(list_of_days) == 0:
             self.list_of_days = init_vocabulary_from_file(FILENAME)[:]
         else:
-            assert isinstance(list_of_days, list) and len(list_of_days) and isinstance(list_of_days[0], WordsPerDay)
+            assert isinstance(list_of_days, list) and \
+                   len(list_of_days) and \
+                   isinstance(list_of_days[0], WordsPerDay), \
+                f"Wrong list_of_days type or len or type of the items " \
+                f"'{type(list_of_days)}', '{len(list_of_days)}', " \
+                f"func – Vocabulary.__init__"
+
             self.list_of_days = list_of_days[:]
 
         self.graphic_name = f"{xlsx_folder}\\{gfile_name}_{self.get_date_range()}.{doc_file_ext}"
@@ -1223,11 +1278,16 @@ class Vocabulary:
         :param days_count: количество дней отступа от текущей даты, int > 0
         :return: непустой айтем, чей индекс = len - days_count
         """
-        assert isinstance(days_count, int) and days_count > 0
+        assert isinstance(days_count, int) and \
+               days_count > 0, \
+            f"Wrong days_count type  or value '{type(days_count)}', '{days_count}', " \
+            f"func – Vocabulary.get_item_before_now"
 
         index = len(list(filter(len, self.list_of_days))) - days_count
 
-        assert index >= 0
+        assert index >= 0, \
+            f"Wrong index value '{index}', " \
+            f"func – Vocabulary.get_item_before_now"
 
         return list(filter(len, self.list_of_days))[index]
 
@@ -1399,9 +1459,18 @@ class Vocabulary:
         :param item: word to search: str or Word
         :return: dict{date: [items with the word]...}
         """
-        assert len(item) > 1
-        assert isinstance(item, str) or isinstance(item, Word)
-        assert item.lower().strip() in self
+        assert len(item) > 1, \
+            f"Wrong item len '{len(item)}', '{item}', " \
+            f"func – Vocabulary.search"
+
+        assert isinstance(item, str) or \
+               isinstance(item, Word), \
+            f"Wrong item type '{type(item)}', '{item}', " \
+            f"func – Vocabulary.search"
+
+        assert item.lower().strip() in self, \
+            f"Item does not in the Vocabulary '{item}', " \
+            f"func – Vocabulary.search"
 
         item = item.lower().strip() if isinstance(item, str) else item
 
@@ -1411,7 +1480,9 @@ class Vocabulary:
         """
         :return: show graphic
         """
-        assert does_file_exist(self.graphic_name)
+        assert does_file_exist(self.graphic_name), \
+            f"The file with name '{self.graphic_name}', does not exist, " \
+            f"func – Vocabulary.show_graph"
 
         system(self.graphic_name)
 
@@ -1445,7 +1516,9 @@ class Vocabulary:
         if day_before_now is None and date is not None:
             repeating_day = self[date]
 
-        assert len(repeating_day) != 0
+        assert len(repeating_day) != 0, \
+            f"Wrong len of the item to repeat '{len(repeating_day)}', " \
+            f"func – Vocabulary.repeat"
 
         app = QApplication(argv)
 
@@ -1552,7 +1625,9 @@ class Vocabulary:
         item = str_to_date(item) if isinstance(item, str) else item
         
         if isinstance(item, dt):
-            assert item in self.get_date_list()
+            assert item in self.get_date_list(), \
+                f"Wrong date '{item}' is not in the Vocabulary, " \
+                f"func – Vocabulary.__getitem__"
 
             for i in filter(lambda x: item == x.datation, self.list_of_days):
                 return i
@@ -1597,7 +1672,9 @@ class Vocabulary:
 
         word = desired_word.lower().strip()
 
-        assert len(word) > 1
+        assert len(word) > 1, \
+            f"Wrong word '{word}', " \
+            "func – Vocabulary.__call__"
 
         if 'by_def' in kwargs and kwargs['by_def']:
             word = f" – {word}"
