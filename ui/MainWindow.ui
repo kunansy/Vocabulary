@@ -14,7 +14,7 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QTextBrowser" name="WordToReapeat">
+   <widget class="QTextBrowser" name="WordToReapeatBrowser">
     <property name="geometry">
      <rect>
       <x>10</x>
@@ -45,9 +45,9 @@
       <height>452</height>
      </rect>
     </property>
-    <layout class="QGridLayout" name="ItsTranstations">
+    <layout class="QGridLayout" name="Choices">
      <item row="1" column="0">
-      <widget class="QPushButton" name="Translation1">
+      <widget class="QPushButton" name="ChoiceButton1">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -66,7 +66,7 @@
       </widget>
      </item>
      <item row="2" column="0">
-      <widget class="QPushButton" name="Translation4">
+      <widget class="QPushButton" name="ChoiceButton4">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -85,7 +85,7 @@
       </widget>
      </item>
      <item row="5" column="0">
-      <widget class="QPushButton" name="Translation3">
+      <widget class="QPushButton" name="ChoiceButton3">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -104,7 +104,7 @@
       </widget>
      </item>
      <item row="3" column="0">
-      <widget class="QPushButton" name="Translation6">
+      <widget class="QPushButton" name="ChoiceButton6">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -123,7 +123,7 @@
       </widget>
      </item>
      <item row="6" column="0">
-      <widget class="QPushButton" name="Translation2">
+      <widget class="QPushButton" name="ChoiceButton2">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -142,7 +142,7 @@
       </widget>
      </item>
      <item row="4" column="0">
-      <widget class="QPushButton" name="Translation5">
+      <widget class="QPushButton" name="ChoiceButton5">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -219,7 +219,7 @@
      </item>
     </layout>
    </widget>
-   <widget class="QLabel" name="WordsRemain">
+   <widget class="QLabel" name="WordsRemainLabel">
     <property name="geometry">
      <rect>
       <x>10</x>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Alert</class>
- <widget class="QWidget" name="Alert">
+ <class>AlertWindow</class>
+ <widget class="QWidget" name="AlertWindow">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <widget class="QTextBrowser" name="Examples">
+  <widget class="QTextBrowser" name="ExamplesBrowser">
    <property name="geometry">
     <rect>
      <x>0</x>
@@ -29,7 +29,7 @@
     </font>
    </property>
   </widget>
-  <widget class="QLabel" name="Result">
+  <widget class="QLabel" name="ResultLabel">
    <property name="geometry">
     <rect>
      <x>0</x>

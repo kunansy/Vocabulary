@@ -1,38 +1,37 @@
-rus_alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+RUS_ALPHABET = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
 
-FILENAME = 'content'
+DATA = 'content'
 
-gfile_name = 'graph'
-sheet_name = 'Graphic'
+SHEET_NAME = 'Graphic'
 
-table_file_ext = 'xlsx'
-doc_file_ext = 'docx'
-pdf_file_ext = 'pdf'
-db_file_ext = 'db'
+TABLE_EXT = 'xlsx'
+DOC_EXT = 'docx'
+PDF_EXT = 'pdf'
+DB_EXT = 'db'
 
-docx_folder = 'docx'
-xlsx_folder = 'xlsx'
-pdf_folder = 'pdf'
+DOC_FOLDER = 'docx'
+TABLE_FOLDER = 'xlsx'
+PDF_FOLDER = 'pdf'
 
 DATEFORMAT = "%d.%m.%Y"
 
 # разделить при выводе WordsPerDay
-divider = '_' * 50
+DIVIDER = '_' * 50
 
 # отступ в поиске при нескольких айтемах из одного дня
-s_tab = '\n\t\t\t'
+S_TAB = '\n\t\t\t'
 
-MainRepeatWindow = 'ui\\MainWindow.ui'
-AlertWindow = 'ui\\AlertWindow.ui'
-MessageWindow = 'ui\\MessageWindow.ui'
-ShowWindow = 'ui\\ShowWindow.ui'
-log_filename = 'Repeating_of_the_learned_words'
+MAIN_WINDOW_PATH = 'ui\\MainWindow.ui'
+ALERT_WINDOW_PATH = 'ui\\AlertWindow.ui'
+MESSAGE_WINDOW_PATH = 'ui\\MessageWindow.ui'
+SHOW_WINDOW_PATH = 'ui\\ShowWindow.ui'
+REPEAT_LOG_FILENAME = 'Repeating_of_the_learned_words'
 
-mods = {
+MODS = {
     'eng_word_to_rus_defs': 1,
     'rus_def_to_eng_words': 2,
     'eng_def_to_rus_defs': 3,
     'rus_def_to_eng_defs': 4
 }
 
-unusual_combinations = ['ou', 'tre', 'nce', 'mm', 'ue', 'se']
+UNUSUAL_COMBINATIONS = ['ou', 'tre', 'nce', 'mm', 'ue', 'se']
