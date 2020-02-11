@@ -150,6 +150,13 @@ def parse_str(string):
         word = word_properties
         properties = Properties('')
 
+    if word.count("'") == 2:
+        trans_begin = word.index("'")
+        word, transcription = word[:trans_begin], word[trans_begin:]
+
+    else:
+        transcription = ''
+
     example = []
     if 'Example: ' in other:
         ex_index = other.index('Example: ')
@@ -175,7 +182,7 @@ def parse_str(string):
     if any('.' in i for i in english):
         print(f"There is wrong symbol in the definition of the word '{word}'")
 
-    return word, properties, english, russian, example
+    return word, transcription, properties, english, russian, example
 
 
 def init_from_xlsx(
@@ -670,15 +677,14 @@ class Properties:
             f"Wrong properties: '{properties}', func – Properties.__init__"
 
         properties = properties.replace('[', '').replace(']', '').split(',') if isinstance(properties, str) else properties
-        properties = list(filter(len, map(str.strip, properties)))
-        properties.sort()
+        properties = list(filter(len, map(lambda x: x.strip().lower(), properties)))
 
         self.properties = properties[:]
 
     def __eq__(self, other):
         if isinstance(other, Properties):
-            return self.properties == other.properties
-        return any(i.lower() in other.lower() for i in self.properties)
+            return sorted(self.properties) == sorted(other.properties)
+        return other.lower() in self.properties
 
     def __ne__(self, other):
         return not (self == other)
@@ -700,13 +706,14 @@ class Properties:
         return hash(self.properties)
 
     def __str__(self):
-        return f"[{', '.join(self.properties)}]"
+        return f"[{', '.join(map(str.capitalize, self.properties))}]"
 
 
 class Word:
     def __init__(
             self,
             word='',
+            transcription='',
             properties='',
             english_def=[],
             russian_def=[],
@@ -721,6 +728,7 @@ class Word:
         :param example: examples of the word using
         """
         assert isinstance(word, str), f"Wrong word: '{type(word)}', '{word}', func – Word.__init__"
+        assert isinstance(transcription, str), f"Wrong transcription: '{transcription}', func – Word.__init__"
         assert isinstance(properties, str) or isinstance(properties, Properties) or isinstance(properties, dict), \
             f"Wrong properties: '{type(properties)}', '{properties}', func – Word.__init__"
         assert isinstance(english_def, list) or isinstance(english_def, str), \
@@ -734,13 +742,14 @@ class Word:
             self.__init__(*parse_str(word))
         else:
             self.word = word.lower().strip()
+            self.transcription = transcription.replace("'", '').strip()
 
             if isinstance(russian_def, str) and isinstance(english_def, str):
                 english_def = english_def.split(';')
                 russian_def = russian_def.split(';')
 
-            self.english = list(map(str.strip, english_def))
-            self.russian = list(map(str.strip, russian_def))
+            self.english = list(filter(len, map(str.strip, english_def)))
+            self.russian = list(filter(len, map(str.strip, russian_def)))
 
             self.properties = ''
 
@@ -750,11 +759,11 @@ class Word:
                 self.properties = Properties(properties)
 
             if isinstance(example, str):
-                self.examples = list(map(str.strip, example.split(';')))
+                self.examples = list(filter(len, map(str.strip, example.split(';'))))
             elif isinstance(example, list):
-                self.examples = list(map(str.strip, example))
+                self.examples = list(filter(len, map(str.strip, example)))
 
-            self.id = word_id(self.word)
+            # self.id = word_id(self.word)
 
     def get_russian(
             self,
@@ -804,8 +813,14 @@ class Word:
             return '; '.join(self.examples)
         return f"{self.word.capitalize()} – {'; '.join(self.examples)}"
 
-    def word_id(self):
-        return self.id if self.id else word_id(self.word)
+    def get_properties(self):
+        return self.properties
+
+    def get_transcription(self):
+        return self.transcription
+
+    # def word_id(self):
+    #     return self.id if self.id else word_id(self.word)
 
     def is_fit(
             self,
@@ -845,6 +860,7 @@ class Word:
 
         return Word(
             max(self.word, other.word),
+            self.transcription,
             other.properties + self.properties,
             other.english[:] + self.english[:],
             other.russian[:] + self.russian[:],
@@ -859,6 +875,7 @@ class Word:
         if isinstance(other, str):
             return self.word == other.lower().strip()
         if isinstance(other, Word):
+            # TODO: свойства могут быть и пустыми
             return self.word == other and \
                    self.properties == other.properties
         if isinstance(other, int):
@@ -939,15 +956,17 @@ class Word:
             return self.word in item.word or item.word in self.word
 
     def __str__(self):
+        transcription = f" /{self.transcription}/" * (len(self.transcription) != 0)
         properties = f" {self.properties}" * (len(self.properties) != 0)
         eng = f"{'; '.join(self.english)}\t" * (len(self.english) != 0)
         rus = f"{'; '.join(self.russian)}" * (len(self.russian) != 0)
 
-        return f"{self.word.capitalize()}{properties} – {eng}{rus}"
+        return f"{self.word.capitalize()}{transcription}{properties} – {eng}{rus}"
 
     def __hash__(self):
         return hash(
             hash(self.word) +
+            hash(self.transcription) +
             hash(self.properties) +
             hash(self.russian) +
             hash(self.english) +
