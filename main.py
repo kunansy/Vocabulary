@@ -150,8 +150,8 @@ def parse_str(string):
         word = word_properties
         properties = Properties('')
 
-    if word.count("'") == 2:
-        trans_begin = word.index("'")
+    if word.count("|") == 2:
+        trans_begin = word.index("|")
         word, transcription = word[:trans_begin], word[trans_begin:]
 
     else:
@@ -430,10 +430,10 @@ class RepeatWords(QMainWindow):
         if self.mode == 1:
             self.are_you_right = lambda x: x.lower() == self.word.get_russian(def_only=True)
             self.init_button = lambda x: x.get_russian(def_only=True).capitalize()
-            self.set_main_word = lambda x: x.word.capitalize()
+            self.set_main_word = lambda x: f"{x.word.capitalize()} {x.get_transcription()}"
         elif self.mode == 2:
-            self.are_you_right = lambda x: x.lower() == self.word.word
-            self.init_button = lambda x: x.word.capitalize()
+            self.are_you_right = lambda x: x.lower() == self.init_button(self.word).lower()
+            self.init_button = lambda x: f"{x.word.capitalize()} {x.get_transcription()}"
             self.set_main_word = lambda x: x.get_russian(def_only=True).capitalize()
         elif self.mode == 3:
             self.are_you_right = lambda x: x.lower() == self.word.get_russian(def_only=True)
@@ -742,7 +742,7 @@ class Word:
             self.__init__(*parse_str(word))
         else:
             self.word = word.lower().strip()
-            self.transcription = transcription.replace("'", '').strip()
+            self.transcription = transcription.replace('|', '').strip()
 
             if isinstance(russian_def, str) and isinstance(english_def, str):
                 english_def = english_def.split(';')
@@ -817,7 +817,7 @@ class Word:
         return self.properties
 
     def get_transcription(self):
-        return self.transcription
+        return f"/{self.transcription}/" * (len(self.transcription) != 0)
 
     # def word_id(self):
     #     return self.id if self.id else word_id(self.word)
@@ -1699,7 +1699,7 @@ try:
     # print(dictionary.information())
     # print(dictionary('возбуж'))
 
-    # dictionary.repeat(date='7.12.2019', mode=1)
+    # dictionary.repeat(date='6.2.2020', mode=2)
 except Exception as trouble:
     print(trouble)
 
