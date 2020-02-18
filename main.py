@@ -45,12 +45,16 @@ def str_to_date(
         return dt(year, month, day)
     
 
-def file_exist(filename):
+def file_exist(
+        filename,
+        extension=''
+):
     """
-    :param filename: имя файла
-    :return: существует ли такой файл
+    :param filename: name of the file
+    :param extension: extension of the file
+    :return: does the file exist
     """
-    return access(filename, F_OK)
+    return access(fix_filename(filename, extension), F_OK)
 
 
 def init_vocabulary_from_file(filename=DATA):
@@ -74,7 +78,7 @@ def init_vocabulary_from_file(filename=DATA):
 
 def fix_filename(
         name,
-        extension
+        extension=''
 ):
     """
     :param name: имя файла
@@ -139,7 +143,7 @@ def parse_str(string):
     """
     Разбирает строку на: термин, свойства, английское определение, русское, пример употребления
     :param string: строка на разбор
-    :return: word, properties, English definition, Russian definition
+    :return: word, properties, definition in the Learned languadge, Russian definition
     """
     word_properties, other = string.split(' – ')
 
@@ -166,23 +170,23 @@ def parse_str(string):
     if other:
         if is_russian(other):
             fri = first_rus_index(other)
-            english = other[:fri].split(';')
+            learned = other[:fri].split(';')
             russian = other[fri:].split(';')
         else:
-            english = other.split(';')
+            learned = other.split(';')
             russian = []
     else:
-        english = []
+        learned = []
         russian = []
 
     # TODO: work with expressions
-    if any(word.lower() in i.split() for i in english):
+    if any(word.lower() in i.split() for i in learned):
         print(f"'{word.capitalize()}' is situated in the definition too. It is recommended to replace it on ***")
 
-    if any('.' in i for i in english):
+    if any('.' in i for i in learned):
         print(f"There is wrong symbol in the definition of the word '{word}'")
 
-    return word, transcription, properties, english, russian, example
+    return word, transcription, properties, learned, russian, example
 
 
 def init_from_xlsx(
@@ -281,7 +285,7 @@ def create_docx(
             if russian_only:
                 item.add_run(f" – {word.get_russian(def_only=True)}")
             else:
-                item.add_run(f" – {word.get_english(def_only=True)} {word.get_russian(def_only=True)}")
+                item.add_run(f" – {word.get_learned(def_only=True)} {word.get_russian(def_only=True)}")
 
     words.save(f"{getcwd()}\\{DOC_FOLDER}\\{out_file}")
 
@@ -304,7 +308,7 @@ def create_pdf(
     assert isinstance(out_file, str), f"Wrong out_file: '{out_file}', func – create_pdf"
     assert isinstance(russian_only, bool), f"Wrong russian_only: '{russian_only}', func – create_pdf"
 
-    if file_exist(f"{PDF_FOLDER}\\{fix_filename(out_file, PDF_EXT)}"):
+    if file_exist(f"{PDF_FOLDER}\\{out_file}", PDF_EXT):
         print(f"PDF-file with name '{out_file}' still exist")
         return
 
@@ -312,8 +316,8 @@ def create_pdf(
     flag = False
 
     if in_file is None or not \
-            (file_exist(fix_filename(in_file, DOC_EXT)) or
-             file_exist(f"{DOC_FOLDER}\\{fix_filename(in_file, DOC_EXT)}")):
+            (file_exist(in_file, DOC_EXT) or
+             file_exist(f"{DOC_FOLDER}\\{in_file}", DOC_EXT)):
         flag = True
         in_file = f"temp.{DOC_EXT}"
 
@@ -438,10 +442,10 @@ class RepeatWords(QMainWindow):
         elif self.mode == 3:
             self.are_you_right = lambda x: x.lower() == self.word.get_russian(def_only=True)
             self.init_button = lambda x: x.get_russian(def_only=True).capitalize()
-            self.set_main_word = lambda x: x.get_english(def_only=True).capitalize()
+            self.set_main_word = lambda x: x.get_learned(def_only=True).capitalize()
         elif self.mode == 4:
-            self.are_you_right = lambda x: x.lower() == self.word.get_english(def_only=True)
-            self.init_button = lambda x: x.get_english(def_only=True).capitalize()
+            self.are_you_right = lambda x: x.lower() == self.word.get_learned(def_only=True)
+            self.init_button = lambda x: x.get_learned(def_only=True).capitalize()
             self.set_main_word = lambda x: x.get_russian(def_only=True).capitalize()
 
     def test(self):
@@ -658,7 +662,7 @@ class Show(QWidget):
 
         self.setWindowTitle(window_title)
 
-        self.EnglishWordsBrowser.setText(
+        self.LearnedWordsBrowser.setText(
             '\n'.join(map(
                     lambda x: f"<i><b>{x.word.capitalize()}</b></i> – {x.get_russian(def_only=True)}<br>",
                     sorted(items)
@@ -715,15 +719,15 @@ class Word:
             word='',
             transcription='',
             properties='',
-            english_def=[],
+            learned_def=[],
             russian_def=[],
             example=[]
     ):
         """
-        :param word: english word to learn
+        :param word: learned word to learn
         :param properties: POS, language level, formal, ancient,
         if verb (transitivity, ) if noun (countable, )
-        :param english_def: english definitions of the word: list
+        :param learned_def: learned definitions of the word: list
         :param russian_def: russian definitions of the word (maybe don't exist): list
         :param example: examples of the word using
         """
@@ -731,8 +735,8 @@ class Word:
         assert isinstance(transcription, str), f"Wrong transcription: '{transcription}', func – Word.__init__"
         assert isinstance(properties, str) or isinstance(properties, Properties) or isinstance(properties, dict), \
             f"Wrong properties: '{type(properties)}', '{properties}', func – Word.__init__"
-        assert isinstance(english_def, list) or isinstance(english_def, str), \
-            f"Wrong english_def: '{type(english_def)}', '{english_def}', func – Word.__init__"
+        assert isinstance(learned_def, list) or isinstance(learned_def, str), \
+            f"Wrong learned_def: '{type(learned_def)}', '{learned_def}', func – Word.__init__"
         assert isinstance(russian_def, list) or isinstance(russian_def, str), \
             f"Wrong russian_def: '{type(russian_def)}', '{russian_def}', func – Word.__init__"
         assert isinstance(example, list) or isinstance(example, str), \
@@ -744,11 +748,11 @@ class Word:
             self.word = word.lower().strip()
             self.transcription = transcription.replace('|', '').strip()
 
-            if isinstance(russian_def, str) and isinstance(english_def, str):
-                english_def = english_def.split(';')
+            if isinstance(russian_def, str) and isinstance(learned_def, str):
+                learned_def = learned_def.split(';')
                 russian_def = russian_def.split(';')
 
-            self.english = list(filter(len, map(str.strip, english_def)))
+            self.learned = list(filter(len, map(str.strip, learned_def)))
             self.russian = list(filter(len, map(str.strip, russian_def)))
 
             self.properties = ''
@@ -781,7 +785,7 @@ class Word:
             return '; '.join(self.russian)
         return f"{self.word} – {'; '.join(self.russian)}".capitalize()
 
-    def get_english(
+    def get_learned(
             self,
             def_only=False,
             by_list=False
@@ -792,10 +796,10 @@ class Word:
         :param by_list: списком или строкой; если True – значение параметра def_only игнорируется
         """
         if by_list:
-            return self.english
+            return self.learned
         if def_only:
-            return '; '.join(self.english)
-        return f"{self.word} – {'; '.join(self.english)}".capitalize()
+            return '; '.join(self.learned)
+        return f"{self.word} – {'; '.join(self.learned)}".capitalize()
 
     def get_examples(
             self,
@@ -862,7 +866,7 @@ class Word:
             max(self.word, other.word),
             self.transcription,
             other.properties + self.properties,
-            other.english[:] + self.english[:],
+            other.learned[:] + self.learned[:],
             other.russian[:] + self.russian[:],
             other.examples[:] + self.examples[:]
         )
@@ -947,7 +951,7 @@ class Word:
 
                 if is_russian(item):
                     return item in self.get_russian(def_only=True)
-                return item in self.get_english(def_only=True)
+                return item in self.get_learned(def_only=True)
 
             # по словам
             return item in self.word or self.word in item
@@ -958,10 +962,10 @@ class Word:
     def __str__(self):
         transcription = f" /{self.transcription}/" * (len(self.transcription) != 0)
         properties = f" {self.properties}" * (len(self.properties) != 0)
-        eng = f"{'; '.join(self.english)}\t" * (len(self.english) != 0)
+        learn = f"{'; '.join(self.learned)}\t" * (len(self.learned) != 0)
         rus = f"{'; '.join(self.russian)}" * (len(self.russian) != 0)
 
-        return f"{self.word.capitalize()}{transcription}{properties} – {eng}{rus}"
+        return f"{self.word.capitalize()}{transcription}{properties} – {learn}{rus}"
 
     def __hash__(self):
         return hash(
@@ -969,7 +973,7 @@ class Word:
             hash(self.transcription) +
             hash(self.properties) +
             hash(self.russian) +
-            hash(self.english) +
+            hash(self.learned) +
             hash(self.examples)
         )
 
@@ -1000,16 +1004,16 @@ class WordsPerDay:
             []
         )
 
-    def english_only(
+    def learned_only(
             self,
             def_only=False
     ):
         """
         :param def_only: return words with its definitions or not
-        :return: the list of the words with its English definitions, the day contains
+        :return: the list of the words with its learned definitions, the day contains
         """
         return reduce(
-            lambda res, elem: res + [elem.get_english(def_only)], 
+            lambda res, elem: res + [elem.get_learned(def_only)],
             self.content, 
             []
         )
@@ -1028,20 +1032,20 @@ class WordsPerDay:
 
     def get_words_list(
             self,
-            with_eng=False,
+            with_learned=False,
             with_rus=False
     ):
         """
-        :param with_eng: return words with English its definitions or not
+        :param with_learned: return words with learned its definitions or not
         :param with_rus: return words with its Russian definitions or not
-        :return: the list of the words, the day contains, with its English/Russian definitions
+        :return: the list of the words, the day contains, with its learned/Russian definitions
         """
         rus = lambda x: f"{x.get_russian(def_only=True)}" * int(with_rus)
-        eng = lambda x: f"{x.get_english(def_only=True)}" * int(with_eng)
+        learned = lambda x: f"{x.get_learned(def_only=True)}" * int(with_learned)
 
-        devis = lambda x: ' – ' * ((len(rus(x)) + len(eng(x))) != 0)
+        devis = lambda x: ' – ' * ((len(rus(x)) + len(learned(x))) != 0)
 
-        value = lambda x: f"{x.word}{devis(x)}{eng(x)}{rus(x)}"
+        value = lambda x: f"{x.word}{devis(x)}{learned(x)}{rus(x)}"
 
         return reduce(
             lambda res, elem: res + [value(elem)], 
@@ -1173,10 +1177,12 @@ class WordsPerDay:
 class Vocabulary:
     def __init__(
             self,
+            filename=DATA,
             list_of_days=None
     ):
         if list_of_days is None or len(list_of_days) == 0:
-            self.list_of_days = init_vocabulary_from_file(DATA)[:]
+            assert file_exist(filename), f"Wrong file: {filename}, func – Vocabulary.__init__"
+            self.list_of_days = init_vocabulary_from_file(filename)[:]
         else:
             assert isinstance(list_of_days, list) and len(list_of_days) and isinstance(list_of_days[0], WordsPerDay), \
                 f"Wrong list_of_days: '{list_of_days}', func – Vocabulary.__init__"
@@ -1229,7 +1235,7 @@ class Vocabulary:
         """
         :return: количество пустых дней
         """
-        return self.duration() - len(self.list_of_days) + 1
+        return self.duration() - len(self.list_of_days)
 
     def get_statistics(self):
         """
@@ -1307,7 +1313,7 @@ class Vocabulary:
         )
 
     def duration(self):
-        return (self.end() - self.begin()).days
+        return (self.end() - self.begin()).days + 1
 
     def create_xlsx(self):
         """
@@ -1560,11 +1566,11 @@ class Vocabulary:
 
     def how_to_say_in_russian(self):
         """
-        :return: ony English words
+        :return: ony learned words
         """
         return list(map(lambda x: x.word, self.get_common_list()))
 
-    def how_to_say_in_english(self):
+    def how_to_say_in_learned(self):
         """
         :return: only Russian definition of the words
         """
@@ -1692,34 +1698,34 @@ class Vocabulary:
 try:
     pass
     # init_from_xlsx('1_1_2020.xlsx', 'content')
+    # irregular_verbs = Vocabulary('Irregular_verbs')
     dictionary = Vocabulary()
-    # print(dictionary.duration())
-    # dictionary.create_pdf()
 
     # print(dictionary.information())
     # print(dictionary('возбуж'))
 
-    # dictionary.repeat(date='6.2.2020', mode=2)
+    # dictionary.repeat(date='6.2.2020', mode=1)
 except Exception as trouble:
     print(trouble)
 
 # TODO: в случае выбора ошибочного варианта при повторении логгировать id выбранного слова
 # TODO: проверку наличия даты в файле из функции логгирования вынести в отдельную
-# TODO: названия всех элементов абстрагировать от 'английский', заменив на learned
 
 # TODO: сделать все функции выполняющими только одну поставленную задачу
 
-# TODO: создать SQL (?) базу данных, ноч то делать с датами?:
+# TODO: создать SQL базу данных (но что делать с датами?)
 #  id – слово – транскрипция – свойства – английское определение – русское определение
 
 # TODO: создать SQL базу данных примеров:
-#  id присутствующих в оригинальном тексте слов – оригинальный текст – перевод
-
-# TODO: подогнаять размер кнопок под самый длинный айтем
-# TODO: метод быстрого чтения из гифки в ВК
+#  id присутствующих в оригинальном тексте слов, за искчючением артиклей, предлогов и прочих единичных айтемов, – оригинальный текст – перевод
 
 # TODO: парсер html – добавить возможность получать примеры употребления слов
 #  из параллельного подкоруса в составе НКРЯ, BNC или COCA
 
 # TODO: окно с галочками для выбора дней для повторения
 # TODO: окно с вводом свойств слов для повторения
+
+# TODO: приыести внутреннюю работу со словами к работе с их id
+# TODO: кодировка для транскрипции в кнопках
+# TODO: написать тесты
+# TODO: добавить возможность вместо списка в функции передовать итератор, преобразовывать его к списку внутри

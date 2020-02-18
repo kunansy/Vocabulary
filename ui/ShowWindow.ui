@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <widget class="QTextBrowser" name="EnglishWordsBrowser">
+  <widget class="QTextBrowser" name="LearnedWordsBrowser">
    <property name="geometry">
     <rect>
      <x>0</x>
