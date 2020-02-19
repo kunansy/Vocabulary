@@ -32,17 +32,12 @@ def str_to_date(
 
     assert isinstance(string, str), f"Wrong date: '{string}', func – str_to_date"
 
-    split_symbol = '.' if string.count('.') == 2 else '_'
+    split_symbol = max(list(filter(lambda x: not x.isalnum(), string)), key=lambda x: string.count(x))
 
-    if isinstance(string, str):
-        string = ''.join(filter(lambda x: x.isdigit() or x in split_symbol, string))
+    string = ''.join(filter(lambda x: x.isdigit() or x in split_symbol, string))
+    day, month, year, *trash = map(int, string.split(split_symbol))
 
-        if swap:
-            month, day, year = map(int, string.split(split_symbol))
-        else:
-            day, month, year = map(int, string.split(split_symbol))
-
-        return DATE(year, month, day)
+    return DATE(year, day, month) if swap else DATE(year, month, day)
     
 
 def file_exist(
@@ -1144,7 +1139,7 @@ class WordsPerDay:
 
     def __contains__(self, item):
         """
-        :param item: word or its diff
+        :param item: word or its def
         :return: does it exist here?
         """
         assert isinstance(item, str) or isinstance(item, Word), \
