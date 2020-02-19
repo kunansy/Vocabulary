@@ -10,7 +10,7 @@ from docx.shared import Pt
 from functools import reduce
 from itertools import groupby
 from datetime import datetime
-from datetime import date as dt
+from datetime import date as DATE
 from xlrd import open_workbook
 from xlsxwriter import Workbook
 from random import shuffle, sample, choice
@@ -27,7 +27,7 @@ def str_to_date(
     :param swap: менять ли местами день и месяц
     :return: date-объект
     """
-    if isinstance(string, dt):
+    if isinstance(string, DATE):
         return string
 
     assert isinstance(string, str), f"Wrong date: '{string}', func – str_to_date"
@@ -42,7 +42,7 @@ def str_to_date(
         else:
             day, month, year = map(int, string.split(split_symbol))
 
-        return dt(year, month, day)
+        return DATE(year, month, day)
     
 
 def file_exist(
@@ -66,12 +66,12 @@ def init_vocabulary_from_file(filename=DATA):
 
     with open(filename, 'r', encoding='utf-8') as file:
         content = file.readlines()
-        dates = list(map(clean_date, filter(lambda x: x.startswith('[') and '/' not in x, content)))
+        dates = map(clean_date, filter(lambda x: x.startswith('[') and '/' not in x, content))
 
         begin = lambda elem: content.index(f"[{elem}]\n")
         end = lambda elem: content.index(f"[/{elem}]\n")
 
-        words_per_day = [WordsPerDay(list(map(Word, content[begin(i) + 1: end(i)])), i) for i in dates]
+        words_per_day = [WordsPerDay(map(Word, content[begin(i) + 1: end(i)]), i) for i in dates]
     file.close()
     return words_per_day
 
@@ -120,7 +120,6 @@ def is_english(item: str):
 
 
 def first_rus_index(item: str):
-    # TODO: speed up
     return list(map(lambda x: x in RUS_ALPHABET, item)).index(True)
 
 
@@ -204,30 +203,32 @@ def init_from_xlsx(
     """
     assert file_exist(filename), f"Wrong file: '{filename}', func – init_from_xlsx"
 
+    if not file_exist(out):
+        out_file = open(out, 'w')
+        out_file.close()
+
     # файл, скачанный из Cambridge Dictionary, содержит дату в английском формате
     date = str_to_date(filename.replace(f".{TABLE_EXT}", ''), swap=True).strftime(DATEFORMAT)
 
-    content = open(out, 'r', encoding='utf-8').readlines()
-
-    assert f"[{date}]\n" not in content, f"Date '{date}' is currently exist in the '{out}' file, func – init_from_xlsx"
+    assert f"[{date}]\n" not in open(out, 'r', encoding='utf-8').readlines(), \
+        f"Date '{date}' currently exists in the '{out}' file, func – init_from_xlsx"
 
     rb = open_workbook(filename)
     sheet = rb.sheet_by_index(0)
 
     # удаляется заглавие, введение и прочие некорректные данные
-    value = list(filter(lambda x: len(x[0]) and (len(x[2]) or len(x[3])),
-                        [sheet.row_values(i) for i in range(sheet.nrows)]))
-    value.sort(key=lambda x: x[0])
-
-    value = list(map(lambda x: Word(x[0], '', x[2], x[3]), value))
+    content = list(filter(lambda x: len(x[0]) and (len(x[2]) or len(x[3])),
+                          [sheet.row_values(i) for i in range(sheet.nrows)]))
+    content.sort(key=lambda x: x[0])
 
     # группировка одинаковых слов вместе
-    value = groupby(value, key=lambda x: x.word)
-
-    file_out = open(out, 'a', encoding='utf-8')
+    content = groupby(map(lambda x: Word(word=x[0], learned_def=x[2], russian_def=x[3]), content),
+                      key=lambda x: (x.word, x.properties))
 
     # суммирование одинаковых слов в один объект класса Word
-    result = [reduce(lambda res, elem: res + elem, list(group[1]), Word('')) for group in value]
+    result = [reduce(lambda res, elem: res + elem, list(group[1]), Word('')) for group in content]
+
+    file_out = open(out, 'a', encoding='utf-8')
 
     print(f"\n\n[{date}]", file=file_out)
     print(*result, sep='\n', file=file_out)
@@ -707,7 +708,7 @@ class Properties:
             return Properties(self.properties + other.properties)
 
     def __hash__(self):
-        return hash(self.properties)
+        return hash(tuple(self.properties))
 
     def __str__(self):
         return f"[{', '.join(map(str.capitalize, self.properties))}]"
@@ -748,9 +749,11 @@ class Word:
             self.word = word.lower().strip()
             self.transcription = transcription.replace('|', '').strip()
 
-            if isinstance(russian_def, str) and isinstance(learned_def, str):
-                learned_def = learned_def.split(';')
+            if isinstance(russian_def, str):
                 russian_def = russian_def.split(';')
+
+            if isinstance(learned_def, str):
+                learned_def = learned_def.split(';')
 
             self.learned = list(filter(len, map(str.strip, learned_def)))
             self.russian = list(filter(len, map(str.strip, russian_def)))
@@ -879,7 +882,7 @@ class Word:
         if isinstance(other, str):
             return self.word == other.lower().strip()
         if isinstance(other, Word):
-            # TODO: свойства могут быть и пустыми
+            # TODO: свойства могут быть и пустыми и различными
             return self.word == other and \
                    self.properties == other.properties
         if isinstance(other, int):
@@ -972,22 +975,24 @@ class Word:
             hash(self.word) +
             hash(self.transcription) +
             hash(self.properties) +
-            hash(self.russian) +
-            hash(self.learned) +
-            hash(self.examples)
+            hash(tuple(self.russian)) +
+            hash(tuple(self.learned)) +
+            hash(tuple(self.examples))
         )
 
 
 class WordsPerDay:
     def __init__(
             self,
-            content: list,
-            datation):
+            content,
+            date):
         """
-        :param content: список объектов класса Word
+        :param content: list or iterator объектов класса Word
         :param date: дата изучения
         """
-        self.datation = str_to_date(datation)
+        assert isinstance(date, str) or isinstance(date), f"Wrong date: {date}, func – WordsPerDay.__init__"
+
+        self.date = str_to_date(date)
         self.content = list(sorted(content))
 
     def russian_only(
@@ -1068,9 +1073,10 @@ class WordsPerDay:
 
     def get_date(
             self,
+            by_str=True,
             dateformat=DATEFORMAT
     ):
-        return self.datation.strftime(dateformat)
+        return self.date.strftime(dateformat) if by_str else self.date
 
     def get_information(self):
         return f"{self.get_date()}\n{len(self)}"
@@ -1169,8 +1175,8 @@ class WordsPerDay:
 
     def __hash__(self):
         return hash(
-            hash(self.content) +
-            hash(self.datation)
+            hash(tuple(self.content)) +
+            hash(self.date)
         )
 
 
@@ -1264,7 +1270,7 @@ class Vocabulary:
         """
         if by_str:
             return list(map(lambda x: x.get_date(), self.list_of_days))
-        return list(map(lambda x: x.datation, self.list_of_days))
+        return list(map(lambda x: x.date, self.list_of_days))
 
     def get_date_range(self):
         """
@@ -1280,10 +1286,10 @@ class Vocabulary:
         :param days_count: количество дней отступа от текущей даты, int > 0
         :return: непустой айтем, чей индекс = len - days_count
         """
-        assert isinstance(days_count, int) and days_count > 0, \
+        assert isinstance(days_count, int) and days_count >= 0, \
             f"Wrong days_count: '{type(days_count)}', '{days_count}', func – Vocabulary.get_item_before_now"
 
-        index = len(self.list_of_days) - days_count
+        index = len(self.list_of_days) - days_count - 1
 
         assert index >= 0, f"Wrong index: '{index}', func – Vocabulary.get_item_before_now"
 
@@ -1488,31 +1494,40 @@ class Vocabulary:
 
     def repeat(
             self,
-            day_before_now=None,
-            date=None,
+            *items_to_repeat,
             **params
     ):
         """
-        :param day_before_now:
-        :param date: day with the date to repeat
+        :param items_to_repeat: dates or int items for
         :param params: additional params to RepeatWord class
         """
         # TODO: повторение изученных 1, 3, 7, 21 день назад слов
-        repeating_day = []
+        days_before_now = filter(lambda x: isinstance(x, int), items_to_repeat)
+        dates = filter(lambda x: isinstance(x, str) or isinstance(x, DATE), items_to_repeat)
 
-        if date is None and day_before_now is not None:
-            repeating_day = self.get_item_before_now(day_before_now)
+        days_before_now = list(map(self.get_item_before_now, days_before_now))
+        dates = list(map(self.__getitem__, dates))
 
-        if day_before_now is None and date is not None:
-            repeating_day = self[date]
+        repeating_days = dates + days_before_now
 
-        assert len(repeating_day) != 0, f"Wrong item to repeat, func – Vocabulary.repeat"
+        assert len(repeating_days) != 0, f"Wrong item to repeat, func – Vocabulary.repeat"
+
+        repeating_days.sort(key=lambda x: x.get_date(by_str=False))
+
+        if len(repeating_days) > 1 and not \
+                any(repeating_days[i - 1].get_date() == repeating_days[i].get_date() for i in range(len(repeating_days))):
+            window_title = f"{repeating_days[0].get_date()}-{repeating_days[-1].get_date()}, {len(repeating_days)} days"
+        else:
+            window_title = repeating_days[0].get_date()
+
+        repeating_days = sum(list(map(WordsPerDay.get_content, repeating_days)), [])
+        repeating_days = list(set(tuple(repeating_days)))
 
         app = QApplication(argv)
 
         repeat = RepeatWords(
-            words=repeating_day.get_content(),
-            window_title=repeating_day.get_date(),
+            words=repeating_days,
+            window_title=window_title,
             **params
         )
 
@@ -1541,7 +1556,7 @@ class Vocabulary:
         """
         if by_str:
             return self.list_of_days[0].get_date()
-        return self.list_of_days[0].datation
+        return self.list_of_days[0].date
 
     def end(
             self,
@@ -1553,7 +1568,7 @@ class Vocabulary:
         """
         if by_str:
             return self.list_of_days[-1].get_date()
-        return self.list_of_days[-1].datation
+        return self.list_of_days[-1].date
 
     def search_by_properties(
             self,
@@ -1592,8 +1607,8 @@ class Vocabulary:
             return any(item.lower().strip() in i for i in self.list_of_days)
         if isinstance(item, Word):
             return any(item in i for i in self.list_of_days)
-        if isinstance(item, dt):
-            if not any(i.datation == item for i in self.list_of_days):
+        if isinstance(item, DATE):
+            if not any(i.date == item for i in self.list_of_days):
                 if self.begin() <= item <= self.end():
                     return True
                 return False
@@ -1619,14 +1634,13 @@ class Vocabulary:
         # TODO: it could be some troubles after empty days removing
         item = str_to_date(item) if isinstance(item, str) else item
         
-        if isinstance(item, dt):
+        if isinstance(item, DATE):
             assert item in self, f"Wrong date: '{item}' func – Vocabulary.__getitem__"
 
             if item not in self.get_date_list():
                 return WordsPerDay([], item)
 
-            for i in filter(lambda x: item == x.datation, self.list_of_days):
-                return i
+            return list(filter(lambda x: item == x.date, self.list_of_days))[0]
         elif isinstance(item, slice):
             start = str_to_date(item.start) if item.start is not None else item.start
             stop = str_to_date(item.stop) if item.stop is not None else item.stop
@@ -1634,14 +1648,14 @@ class Vocabulary:
             if start is not None and stop is not None and start > stop:
                 raise ValueError(f"Start '{start}' cannot be more than stop '{stop}'")
 
-            if start is not None and (start < self.list_of_days[0].datation or start > self.list_of_days[-1].datation):
+            if start is not None and (start < self.list_of_days[0].date or start > self.list_of_days[-1].date):
                 raise ValueError(f"Wrong start: '{start}'")
 
-            if stop is not None and (stop > self.list_of_days[-1].datation or stop < self.list_of_days[0].datation):
+            if stop is not None and (stop > self.list_of_days[-1].date or stop < self.list_of_days[0].date):
                 raise ValueError(f"Wrong stop: '{stop}'")
 
-            begin = start if start is None else list(map(lambda x: x.datation == start, self.list_of_days)).index(True)
-            end = stop if stop is None else list(map(lambda x: x.datation == stop, self.list_of_days)).index(True)
+            begin = start if start is None else list(map(lambda x: x.date == start, self.list_of_days)).index(True)
+            end = stop if stop is None else list(map(lambda x: x.date == stop, self.list_of_days)).index(True)
 
             return self.__class__(self.list_of_days[begin:end])
 
@@ -1694,17 +1708,19 @@ class Vocabulary:
         return f"{self.information()}\n{DIVIDER}\n" + \
                f"\n{DIVIDER}\n\n".join(map(str, self.list_of_days))
 
+    def __hash__(self):
+        return hash(sum(hash(i) for i in self.list_of_days))
+
 
 try:
     pass
-    # init_from_xlsx('1_1_2020.xlsx', 'content')
+    # init_from_xlsx('6_2_2020.xlsx')
     # irregular_verbs = Vocabulary('Irregular_verbs')
     dictionary = Vocabulary()
-
     # print(dictionary.information())
     # print(dictionary('возбуж'))
 
-    # dictionary.repeat(date='6.2.2020', mode=1)
+    # dictionary.repeat(0, mode=1)
 except Exception as trouble:
     print(trouble)
 
@@ -1729,3 +1745,5 @@ except Exception as trouble:
 # TODO: кодировка для транскрипции в кнопках
 # TODO: написать тесты
 # TODO: добавить возможность вместо списка в функции передовать итератор, преобразовывать его к списку внутри
+# TODO: выделение из строки примера, русского и анг определенией вынести в отдельные функции
+# TODO: backup на Google Drive
