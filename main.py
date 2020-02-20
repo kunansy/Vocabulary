@@ -118,6 +118,44 @@ def first_rus_index(item: str):
     return list(map(lambda x: x in RUS_ALPHABET, item)).index(True)
 
 
+def up_word(string, item):
+    """
+    :param string: string were the item is situated
+    :param item: item to up in the string
+    :return: string with upped item
+    """
+    assert (isinstance(item, str) or isinstance(item, Word)) and len(item) > 0, \
+        f"Wrong item to up: '{item}', string: '{string}', func – up_word"
+    assert isinstance(string, str) and len(string) >= len(item), \
+        f"Wrong string: '{string}', func – up_word"
+
+    word = item.lower().strip() if isinstance(item, str) else item.word
+
+    assert word in string.lower(), \
+        f"Wrong item: '{word}' is not in the string '{string}', func – up_word"
+
+    return ' '.join(i.upper() if word in i.lower() else i for i in string.split())
+
+
+def up_word_in_def(string, item):
+    """
+    :param string: string were the item is situated
+    :param item: item to up in the string
+    :return: string with upped item after the dash symbol
+    """
+    assert (isinstance(item, str) or isinstance(item, Word)) and len(item) > 0, \
+        f"Wrong item to up: '{item}', string: '{string}', func – up_word_in_def"
+    assert isinstance(string, str) and len(string) >= len(item) and '–' in string, \
+        f"Wrong string: '{string}', func – up_word_in_def"
+
+    word = item.lower().strip() if isinstance(item, str) else item.word
+
+    assert word in string[string.index('–'):].lower(), \
+        f"Wrong item: '{word}' is not in the string '{string}', func – up_word_in_def"
+
+    return string[:string.index('–')] + up_word(string[string.index('–'):], word)
+
+
 def does_word_fit_with_american_spelling(
         word: str,
         by_str=True
@@ -1689,11 +1727,6 @@ class Vocabulary:
 
         word = desired_word.lower().strip() if isinstance(desired_word, str) else desired_word.word
 
-        up_word = lambda string, item: ' '.join(i.upper() if item.replace('–', '').strip() in i else i for i in string.split())
-
-        in_def = lambda string, item: string[:dash(string)] + up_word(string[dash(string):], item)
-        dash = lambda x: x.index('–')
-
         if 'by_def' in kwargs and kwargs['by_def']:
             word = f" – {word}"
 
@@ -1707,7 +1740,7 @@ class Vocabulary:
             return None if not res else '\n'.join(res)
 
         try:
-            return '\n'.join([f"{date}: {S_TAB.join(map(lambda x: in_def(str(x), word), words))}" for date, words in self.search(word).items()])
+            return '\n'.join([f"{date}: {S_TAB.join(map(lambda x: up_word_in_def(str(x), word), words))}" for date, words in self.search(word).items()])
         except Exception:
             return f"Word '{word}' not found"
 
@@ -1726,8 +1759,8 @@ try:
     pass
     # init_from_xlsx('6_2_2020.xlsx')
     # irregular_verbs = Vocabulary('Irregular_verbs')
-    # dictionary = Vocabulary()
-    print('; '.join([]))
+    dictionary = Vocabulary()
+    # print(dictionary['6.2.2020'])
     # print(dictionary.information())
     # print(dictionary('возбуж'))
 

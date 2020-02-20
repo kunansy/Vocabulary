@@ -37,3 +37,29 @@ def test_str_to_date_by_date_1():
 
 def test_str_to_date_by_date_2():
     assert str_to_date(DATE(1970, 12, 12)) == DATE(1970, 12, 12)
+
+
+def test_up_word_1():
+    assert up_word("can YoU show me your preferences?", 'pref') == "can YoU show me your PREFERENCES?"
+
+
+def test_up_word_2():
+    with pytest.raises(AssertionError):
+        up_word('abcd', 'abcde')
+
+
+def test_up_word_3():
+    assert up_word('getting the got is getted the god', 'get') == 'GETTING the got is GETTED the god'
+
+
+def test_up_word_4():
+    with pytest.raises(AssertionError):
+        up_word('strinh', '')
+
+
+def test_up_word_5():
+    assert up_word('get the got would wloud enwouldy', Word('would')) == 'get the got WOULD wloud ENWOULDY'
+
+
+if __name__ == "__main__":
+    pytest.main()
