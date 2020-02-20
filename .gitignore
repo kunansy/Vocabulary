@@ -5,6 +5,7 @@
 *.mp3
 *.m4a
 Repeating_of_the_learned_words
+test.bat
 
 .pytest_cache/
 .idea/
