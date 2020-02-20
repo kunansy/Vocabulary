@@ -6,6 +6,7 @@
 *.m4a
 Repeating_of_the_learned_words
 
+.pytest_cache/
 .idea/
 __pycache__/
 Audio/
