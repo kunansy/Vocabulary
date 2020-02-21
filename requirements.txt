@@ -5,3 +5,4 @@ XlsxWriter==1.2.7
 python-docx==0.8.10
 comtypes==1.1.7
 docx==0.2.4
+requests==2.23.0

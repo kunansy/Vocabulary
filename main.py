@@ -4,18 +4,38 @@ from constants import *
 
 from sys import argv
 from PyQt5 import uic
-from hashlib import sha3_512
+from requests import get
 from docx import Document
 from docx.shared import Pt
+from hashlib import sha3_512
 from functools import reduce
 from itertools import groupby
 from datetime import datetime
-from datetime import date as DATE
 from xlrd import open_workbook
 from xlsxwriter import Workbook
+from datetime import date as DATE
 from random import shuffle, sample, choice
 from os import system, getcwd, access, F_OK
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
+
+
+def get_synonyms(word):
+    """
+    :param word: word to find its synonyms
+    :return: synonyms or near words
+    """
+    assert isinstance(word, str), f"Wrong word {word}, func – get_synonyms"
+
+    item = get(SYNONYMS_SEARCH_URL.format(word=word, model=SYNONYMS_SEARCH_MODEL))
+    assert item.ok, f"Something went wrong, word: '{word}', func – get_synonyms"
+
+    try:
+        responses = list(list(item.json()[SYNONYMS_SEARCH_MODEL].values())[0].keys())
+    except:
+        return []
+
+    words = list(map(lambda x: ''.join(filter(str.isalpha, x.split('_')[0])), responses))
+    return list(set(words))
 
 
 def str_to_date(
@@ -150,8 +170,10 @@ def up_word_in_def(string, item):
 
     word = item.lower().strip() if isinstance(item, str) else item.word
 
-    assert word in string[string.index('–'):].lower(), \
-        f"Wrong item: '{word}' is not in the string '{string}', func – up_word_in_def"
+    # assert word in string[string.index('–'):].lower(), \
+    #     f"Wrong item: '{word}' is not in the string '{string}', func – up_word_in_def"
+    if word not in string[string.index('–'):].lower():
+        return string
 
     return string[:string.index('–')] + up_word(string[string.index('–'):], word)
 
@@ -160,14 +182,14 @@ def does_word_fit_with_american_spelling(
         word: str,
         by_str=True
 ):
-    assert isinstance(word, str), f"Wrong word: '{word}', func – does_word_fit_with_american_spelling"
+    assert isinstance(word, str) or isinstance(word, list), f"Wrong word: '{word}', func – does_word_fit_with_american_spelling"
 
-    # TODO: to correct style
-    if word.endswith('e') or \
-            (word.endswith('re') and not word.endswith('ogre')) or \
+    word = ''.join(word) if isinstance(word, list) else word
+
+    if (word.endswith('re') and not word.endswith('ogre')) or \
             any(i in word for i in UNUSUAL_COMBINATIONS) or \
             any(word[i] == 'l' and word[i + 1] != 'l' for i in range(len(word) - 1)):
-        return f"Probably, there are wring combinations is the word '{word}'" if by_str else False
+        return f"Probably, there are wrong combinations in the word '{word}'" if by_str else False
     return "OK" if by_str else True
 
 
@@ -217,6 +239,9 @@ def parse_str(string):
 
     if any('.' in i for i in learned):
         print(f"There is wrong symbol in the definition of the word '{word}'")
+
+    # if not does_word_fit_with_american_spelling(learned, by_str=False):
+    #     print(does_word_fit_with_american_spelling(learned))
 
     return word, transcription, properties, learned, russian, example
 
@@ -429,7 +454,7 @@ class RepeatWords(QMainWindow):
 
         assert isinstance(words, list) and len(words) and isinstance(words[0], Word), \
             f"Wrong words: '{words}', func – RepeatWords.__init__"
-        assert (isinstance(mode, int) and mode in range(1, 5)) or (isinstance(mode, str) and mode in MODS), \
+        assert (isinstance(mode, int) and mode in range(1, 5)) or (isinstance(mode, str) and mode in REPEATING_MODS), \
             f"Wrong mode: '{mode}', func – RepeatWords.__init__"
         assert isinstance(log_filename, str), \
             f"Wrong log_filename: '{log_filename}', func – RepeatWords.__init__"
@@ -453,7 +478,7 @@ class RepeatWords(QMainWindow):
         if isinstance(mode, int):
             self.mode = mode
         elif isinstance(mode, str):
-            self.mode = MODS[mode]
+            self.mode = REPEATING_MODS[mode]
 
         self.init_fit_mode()
 
@@ -552,7 +577,7 @@ class RepeatWords(QMainWindow):
             self.AlertWindow.display(
                 word=self.word,
                 result=result,
-                example=self.word.examples,
+                content=self.word.examples,
                 style=style
             )
         else:
@@ -589,11 +614,13 @@ class RepeatWords(QMainWindow):
             )
 
     def hint(self):
-        if self.word.examples:
+        synonyms = get_synonyms(self.word.word)
+
+        if self.word.examples or synonyms:
             self.AlertWindow.display(
                 word=self.word,
                 result=f"{self.HintButton.text()}",
-                example=self.word.examples,
+                content=self.word.examples + ([f"<b>Synonyms/linked words:</b> {', '.join(synonyms)}"] * bool(synonyms)),
                 style="color: blue"
             )
 
@@ -661,12 +688,12 @@ class Alert(QWidget):
             self,
             word,
             result,
-            example,
+            content,
             style=''
     ):
         assert isinstance(word, Word), f"Wrong word: '{word}', func – Alert.display"
         assert isinstance(result, str), f"Wrong result: '{result}', func – Alert.display"
-        assert len(example) > 0, "Empty example, choose the Message window instead, func – Alert.display"
+        assert len(content) > 0, "Empty example, choose the Message window instead, func – Alert.display"
 
         self.ResultLabel.setText(result)
 
@@ -676,7 +703,7 @@ class Alert(QWidget):
         bold_word = lambda string, x: ' '.join(f"<b>{i}</b>" if x.lower() in i.lower() else i for i in string.split())
 
         self.ExamplesBrowser.setText('\n'.join(map(lambda x: f"{x[0]}. {bold_word(x[1], word.word)}<br>",
-                                                   enumerate(example, 1))))
+                                                   enumerate(content, 1))))
 
         self.show()
 
@@ -689,7 +716,7 @@ class Message(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('Alert')
+        self.setWindowTitle('Message')
         self.MessageText.setText('')
 
     def display(
@@ -925,7 +952,6 @@ class Word:
         if isinstance(other, str):
             return self.word == other.lower().strip()
         if isinstance(other, Word):
-            # TODO: свойства могут быть и пустыми и различными
             return self.word == other and \
                    self.properties == other.properties
         if isinstance(other, int):
@@ -1186,15 +1212,16 @@ class WordsPerDay:
         return any(item in i for i in self.content)
 
     def __getitem__(self, item):
-        # TODO: slice
         """
-        :param item: word or index
-        :return: object Word
+        :param item: word or index or slice
+        :return: object Word or WordsPerDay item in case of slice
         """
         if (isinstance(item, str) or isinstance(item, Word)) and item in self:
             return list(filter(lambda x: item in x, self.content))
         if isinstance(item, int) and abs(item) <= len(self.content):
             return self.content[item]
+        if isinstance(item, slice):
+            return self.__class__(self.content[item.start:item.stop:item.step], self.date)
 
         raise IndexError(f"Wrong index or item {item} does not exist in {self.get_date()}")
 
@@ -1679,16 +1706,7 @@ class Vocabulary:
             f"Wrong item: '{item}', func – Vocabulary.__getitem__"
 
         # TODO: it could be some troubles after empty days removing
-        item = str_to_date(item) if isinstance(item, str) else item
-        
-        if isinstance(item, DATE):
-            assert item in self, f"Wrong date: '{item}' func – Vocabulary.__getitem__"
-
-            if item not in self.get_date_list():
-                return WordsPerDay([], item)
-
-            return list(filter(lambda x: item == x.date, self.list_of_days))[0]
-        elif isinstance(item, slice):
+        if isinstance(item, slice):
             start = str_to_date(item.start) if item.start is not None else item.start
             stop = str_to_date(item.stop) if item.stop is not None else item.stop
 
@@ -1705,6 +1723,15 @@ class Vocabulary:
             end = stop if stop is None else list(map(lambda x: x.date == stop, self.list_of_days)).index(True)
 
             return self.__class__(self.list_of_days[begin:end])
+
+        item = str_to_date(item)
+
+        assert item in self, f"Wrong date: '{item}' func – Vocabulary.__getitem__"
+
+        if item not in self.get_date_list():
+            return WordsPerDay([], item)
+
+        return list(filter(lambda x: item == x.date, self.list_of_days))[0]
 
     def __iter__(self):
         return iter(self.list_of_days)
@@ -1741,8 +1768,8 @@ class Vocabulary:
 
         try:
             return '\n'.join([f"{date}: {S_TAB.join(map(lambda x: up_word_in_def(str(x), word), words))}" for date, words in self.search(word).items()])
-        except Exception:
-            return f"Word '{word}' not found"
+        except Exception as trouble:
+            return f"Word '{word}' not found, {trouble}"
 
     def __str__(self):
         """
@@ -1762,12 +1789,12 @@ try:
     dictionary = Vocabulary()
     # print(dictionary['6.2.2020'])
     # print(dictionary.information())
-    # print(dictionary('возбуж'))
 
-    # dictionary.repeat(0, mode=4)
+    dictionary.repeat('7.12.2019', mode=1)
 except Exception as trouble:
     print(trouble)
 
+# TODO: добавть возможность листать список слов в повторении
 # TODO: проверку наличия даты в файле из функции логгирования вынести в отдельную
 
 # TODO: сделать все функции выполняющими только одну поставленную задачу

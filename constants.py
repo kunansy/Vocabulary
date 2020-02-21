@@ -27,7 +27,7 @@ MESSAGE_WINDOW_PATH = 'ui\\MessageWindow.ui'
 SHOW_WINDOW_PATH = 'ui\\ShowWindow.ui'
 REPEAT_LOG_FILENAME = 'Repeating_of_the_learned_words'
 
-MODS = {
+REPEATING_MODS = {
     'eng_word_to_rus_defs': 1,
     'rus_def_to_eng_words': 2,
     'eng_def_to_rus_defs': 3,
@@ -35,3 +35,9 @@ MODS = {
 }
 
 UNUSUAL_COMBINATIONS = ['ou', 'tre', 'nce', 'mm', 'ue', 'se']
+
+SYNONYMS_SEARCH_URL = "https://rusvectores.org/{model}/{word}/api/json/"
+SYNONYMS_SEARCH_MODEL = 'tayga_upos_skipgram_300_2_2019'
+
+# похоже, это чудо даёт рифмовки
+# 'araneum_none_fasttextcbow_300_5_2018'
