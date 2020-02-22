@@ -414,27 +414,33 @@ def word_id(item):
     return _id[:4] + _id[-4:]
 
 
-def search_id(words_list, item, search_by=None):
+def search_by_attribute(words_list, item, search_by=None):
     """
-    :param words_list: list of the words where iten=m is
-    :param item: item to search its id
-    :param search_by: expected item's place
-    :return: id
-    """
-    assert isinstance(words_list, list), f"Wrong words_list: '{words_list}', func – get_id"
+    Ищет в выборке объект класса Word, один из атрибутов которого соответствует искомому айтему
 
-    if search_by == 'learned_def' or search_by is None:
-        found = list(filter(lambda x: x.get_learned(def_only=True) == item.lower(), words_list))
+    :param words_list: выборка, где искомый элемент должен находится
+    :param item: искомый атрибут: русское определение, иноязычное, само слово
+    :param search_by: атрибут, в котором item, вероятно, находится
+    :return: найденный объект Word
+    """
+    assert isinstance(words_list, list) and len(words_list) and isinstance(words_list[0], Word), \
+        f"Wrong words_list: '{words_list}', func – search_by_attribute"
+    assert isinstance(item, str) or isinstance(item, Word), f"Wrong item: '{item}', func – search_by_attribute"
+
+    word = item.lower().strip() if isinstance(item, str) else item.word
+
+    if search_by is None or search_by == 'learned_def':
+        found = list(filter(lambda x: x.get_learned(def_only=True) == word, words_list))
 
         if len(found) == 1:
-            return word_id(found[0])
-    if search_by == 'russian_def' or search_by is None:
-        found = list(filter(lambda x: x.get_russian(def_only=True) == item.lower(), words_list))
+            return found[0]
+    if search_by is None or search_by == 'russian_def':
+        found = list(filter(lambda x: x.get_russian(def_only=True) == word, words_list))
 
         if len(found) == 1:
-            return word_id(found[0])
-    if search_by == 'word' or search_by is None:
-        found = list(filter(lambda x: x.word == item.lower(), words_list))
+            return found[0]
+    if search_by is None or search_by == 'word':
+        found = list(filter(lambda x: x.word == word, words_list))
 
         if len(found) == 1:
             return found[0]
@@ -573,13 +579,13 @@ class RepeatWords(QMainWindow):
             self.set_main_word = lambda x: x.get_russian(def_only=True).capitalize()
 
     def test(self):
-        if self.word:
+        if self.word and self.word not in self.wrong_translations:
             self.wrong_translations.append(self.word)
 
         if len(self.words) == 1:
             self.WordsRemainLabel.setText("The last one")
         else:
-            self.WordsRemainLabel.setText(f"Remain: {len(self.words)} words")
+            self.WordsRemainLabel.setText(f"Remain {len(self.words)} words")
 
         self.word = choice(self.words)
         self.words.remove(self.word)
@@ -612,18 +618,18 @@ class RepeatWords(QMainWindow):
             result,
             style
     ):
-        if self.word.examples:
-            self.AlertWindow.display(
-                word=self.word,
-                result=result,
-                content=self.word.examples,
-                style=style
-            )
-        else:
-            self.MessageWindow.display(
-                message=result,
-                style=style
-            )
+        self.MessageWindow.display(
+            message=result,
+            style=style
+        )
+        # else:
+        #     synonyms = self.word.get_synonyms(synonyms_only=True)
+        #     self.AlertWindow.display(
+        #         word=self.word,
+        #         result=result,
+        #         content=examples,
+        #         style=style
+        #     )
 
     def are_you_right(self):
         if self.are_you_right(self.sender().text()):
@@ -639,7 +645,6 @@ class RepeatWords(QMainWindow):
         else:
             self.log(
                 self.word,
-                'wrong',
                 w_choice=self.sender().text()
             )
 
@@ -649,13 +654,19 @@ class RepeatWords(QMainWindow):
             )
 
     def hint(self):
-        synonyms = get_synonyms(self.word.word)
+        try:
+            synonyms = get_synonyms(self.word.word)
+        except:
+            synonyms = []
 
         if self.word.examples or synonyms:
+            examples = self.word.examples
+            synonyms = [f"<b>Synonyms/linked words</b>: {', '.join(synonyms)}"] * bool(synonyms)
+
             self.AlertWindow.display(
                 word=self.word,
                 result=f"{self.HintButton.text()}",
-                content=self.word.examples + ([f"<b>Synonyms/linked words:</b> {', '.join(synonyms)}"] * bool(synonyms)),
+                content=examples + synonyms,
                 style="color: blue"
             )
 
@@ -670,6 +681,9 @@ class RepeatWords(QMainWindow):
         self.show_words()
 
     def close(self):
+        """
+        :return: по нажатии на копку 'Exit' закроет все окна
+        """
         self.AlertWindow.close()
         self.MessageWindow.close()
         self.ShowWindow.close()
@@ -927,6 +941,25 @@ class Word:
         if examples_only:
             return '; '.join(self.examples)
         return f"{self.word.capitalize()} – {'; '.join(self.examples)}"
+
+    def get_synonyms(
+            self,
+            synonyms_only=False
+    ):
+        """
+        :param synonyms_only: True – только синонимы списком; False – слово и его синонимы
+        """
+        try:
+            synonyms = get_synonyms(self.word)
+        except:
+            return []
+
+        if synonyms:
+            if synonyms_only:
+                return synonyms
+            else:
+                return f"{self.word.capitalize()} – {', '.join(synonyms)}"
+        return []
 
     def get_transcription(self):
         return f"/{self.transcription}/" * (len(self.transcription) != 0)
@@ -1606,13 +1639,16 @@ class Vocabulary:
         :param items_to_repeat: dates or int items
         :param params: additional params to RepeatWord class
         """
-        days_before_now = filter(lambda x: isinstance(x, int), items_to_repeat)
-        dates = filter(lambda x: isinstance(x, str) or isinstance(x, DATE), items_to_repeat)
+        if 'random' in items_to_repeat:
+            repeating_days = [choice(self.list_of_days)]
+        else:
+            days_before_now = filter(lambda x: isinstance(x, int), items_to_repeat)
+            dates = filter(lambda x: isinstance(x, str) or isinstance(x, DATE), items_to_repeat)
 
-        days_before_now = list(map(self.get_item_before_now, days_before_now))
-        dates = list(map(self.__getitem__, dates))
+            days_before_now = list(map(self.get_item_before_now, days_before_now))
+            dates = list(map(self.__getitem__, dates))
 
-        repeating_days = dates + days_before_now
+            repeating_days = dates + days_before_now
 
         assert len(repeating_days) != 0, f"Wrong item to repeat, func – Vocabulary.repeat"
 
@@ -1817,17 +1853,16 @@ class Vocabulary:
         return hash(sum(hash(i) for i in self.list_of_days))
 
 
-try:
-    pass
-    # init_from_xlsx('6_2_2020.xlsx')
-    # irregular_verbs = Vocabulary('Irregular_verbs')
-    dictionary = Vocabulary()
-    # print(dictionary['6.2.2020'])
-    # print(dictionary.information())
+if __name__ == "__main__":
+    try:
+        pass
+        # init_from_xlsx('6_2_2020.xlsx')
+        dictionary = Vocabulary()
 
-    dictionary.repeat('7.12.2019', mode=1)
-except Exception as trouble:
-    print(trouble)
+        dictionary.repeat('7.12.2019', mode=1)
+
+    except Exception as trouble:
+        print(trouble)
 
 # TODO: добавть возможность листать список слов в повторении
 # TODO: проверку наличия даты в файле из функции логгирования вынести в отдельную
