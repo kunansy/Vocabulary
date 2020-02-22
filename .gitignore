@@ -4,7 +4,7 @@
 *.pyc
 *.mp3
 *.m4a
-Repeating_of_the_learned_words
+Repeating_log.json
 test.bat
 
 .pytest_cache/

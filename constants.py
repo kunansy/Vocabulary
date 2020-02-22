@@ -25,7 +25,7 @@ MAIN_WINDOW_PATH = 'ui\\MainWindow.ui'
 ALERT_WINDOW_PATH = 'ui\\AlertWindow.ui'
 MESSAGE_WINDOW_PATH = 'ui\\MessageWindow.ui'
 SHOW_WINDOW_PATH = 'ui\\ShowWindow.ui'
-REPEAT_LOG_FILENAME = 'Repeating_of_the_learned_words'
+REPEAT_LOG_FILENAME = 'repeating_log.json'
 
 REPEATING_MODS = {
     'eng_word_to_rus_defs': 1,

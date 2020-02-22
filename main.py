@@ -9,6 +9,7 @@ from docx import Document
 from docx.shared import Pt
 from hashlib import sha3_512
 from functools import reduce
+from json import loads, dump
 from itertools import groupby
 from datetime import datetime
 from xlrd import open_workbook
@@ -436,7 +437,45 @@ def search_id(words_list, item, search_by=None):
         found = list(filter(lambda x: x.word == item.lower(), words_list))
 
         if len(found) == 1:
-            return word_id(found[0])
+            return found[0]
+
+    return f"Wrong sample or word '{word}' has more than one id in the sample: {sample}"
+
+
+def load_json_dict(filename=REPEAT_LOG_FILENAME):
+    """
+    :param filename: имя json файла, из которого будет загружен лог повторений слов
+    :return: json лог повторения слов или пустой словарь
+    """
+    assert file_exist(filename, 'json'), f"Wrong file: {filename}, func – load_json_dict"
+
+    with open(fix_filename(filename, 'json'), 'r', encoding='utf-8') as file:
+        res = ''.join(file.readlines())
+        file.close()
+    if res:
+        return loads(res)
+    return {}
+
+
+def dump_json_dict(data, filename=REPEAT_LOG_FILENAME):
+    """
+    :param data: данные для вывода в файл
+    :param filename: имя файла, в который словарь будет выведен
+    :return: выводит в json-файл словарь с отступом в 2 пробела
+    """
+    assert isinstance(data, dict), f"Wrong data: '{data}', func – dump_json_dict"
+
+    with open(fix_filename(filename, 'json'), 'w') as file:
+        dump(data, file, indent=2)
+        file.close()
+
+
+def get_current_date(dateformat=DATEFORMAT):
+    """
+    :param dateformat: формат даты, по умолчанию: dd.mm.yy
+    :return: текущую дату в соответствующем строковом формате
+    """
+    return datetime.now().strftime(dateformat)
 
 
 class RepeatWords(QMainWindow):
@@ -482,7 +521,7 @@ class RepeatWords(QMainWindow):
 
         self.init_fit_mode()
 
-        self.log_filename = log_filename
+        self.log_filename = fix_filename(log_filename, 'json')
         if not file_exist(self.log_filename):
             temp = open(self.log_filename, 'w', encoding='utf-8')
             temp.close()
@@ -588,10 +627,6 @@ class RepeatWords(QMainWindow):
 
     def are_you_right(self):
         if self.are_you_right(self.sender().text()):
-            self.log(
-                self.word,
-                "Excellent"
-            )
             self.show_result(
                 result='<i>Excellent</i>',
                 style="color: 'green';"
@@ -643,32 +678,32 @@ class RepeatWords(QMainWindow):
     def log(
             self,
             word,
-            result,
-            w_choice=''
+            w_choice
     ):
         """
-        :param word: слово
-        :param result: кезультат
-        :param w_choice: ощибочный вариант
-        :return: логгирование в файл
+        :param word: слово, str или Word
+        :param w_choice: ошибочный вариант
+        :return: логгирование в файл ошибочных вариантов в виде json:
+        {id_слова: {id ошибочного варианта: количество ошибок}}
         """
-        assert file_exist(self.log_filename), "Wrong log file, func – RepeatWords.log"
+        assert file_exist(self.log_filename, 'json'), "Wrong log file, func – RepeatWords.log"
+        assert isinstance(word, str) or isinstance(word, Word), f"Wrong word: '{word}', func – RepeatWords.log"
+        assert isinstance(w_choice, str) and w_choice, f"Wrong w_choice: '{w_choice}', func – RepeatWords.log"
 
-        if len(w_choice) > 0:
-            w_choice = f", chosen variant: '{search_id(self.wrong_translations, w_choice)}', mode = {self.mode}"
+        repeating_word_id = word_id(word)
+        wrong_choice_id = search_by_attribute(self.wrong_translations, w_choice).get_id()
 
-        content = open(self.log_filename, 'r').readlines()
+        data = load_json_dict(self.log_filename)
 
-        with open(self.log_filename, 'a', encoding='utf-8') as log_file:
-            current_date = datetime.now().strftime(DATEFORMAT)
-
-            if f"[{current_date}]\n" in content:
-                log_file.write(f"\t{word.word.capitalize()} – {result}{w_choice}\n")
+        if repeating_word_id in data:
+            if wrong_choice_id in data[repeating_word_id]:
+                data[repeating_word_id][wrong_choice_id] += 1
             else:
-                log_file.write(f"\n[{current_date}]\n")
-                log_file.write(f"\t{word.word.capitalize()} – {result}{w_choice}\n")
+                data[repeating_word_id][wrong_choice_id] = 1
+        else:
+            data[repeating_word_id] = {wrong_choice_id: 1}
 
-        log_file.close()
+        dump_json_dict(data=data, filename=self.log_filename)
 
 
 class Alert(QWidget):
