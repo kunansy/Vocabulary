@@ -27,7 +27,7 @@ def get_synonyms(word):
     """
     assert isinstance(word, str), f"Wrong word {word}, func – get_synonyms"
 
-    item = get(SYNONYMS_SEARCH_URL.format(word=word, model=SYNONYMS_SEARCH_MODEL))
+    item = get(SYNONYMS_SEARCH_URL.format(word=word.lower().strip(), model=SYNONYMS_SEARCH_MODEL))
     assert item.ok, f"Something went wrong, word: '{word}', func – get_synonyms"
 
     try:
@@ -448,7 +448,7 @@ def search_by_attribute(words_list, item, search_by=None):
     return f"Wrong sample or word '{word}' has more than one id in the sample: {sample}"
 
 
-def load_json_dict(filename=REPEAT_LOG_FILENAME):
+def load_json_dict(filename):
     """
     :param filename: имя json файла, из которого будет загружен лог повторений слов
     :return: json лог повторения слов или пустой словарь
@@ -463,7 +463,7 @@ def load_json_dict(filename=REPEAT_LOG_FILENAME):
     return {}
 
 
-def dump_json_dict(data, filename=REPEAT_LOG_FILENAME):
+def dump_json_dict(data, filename):
     """
     :param data: данные для вывода в файл
     :param filename: имя файла, в который словарь будет выведен
@@ -1639,8 +1639,15 @@ class Vocabulary:
         :param items_to_repeat: dates or int items
         :param params: additional params to RepeatWord class
         """
-        if 'random' in items_to_repeat:
-            repeating_days = [choice(self.list_of_days)]
+        if 'random' in items_to_repeat or 'random' in params:
+            if 'random' in items_to_repeat:
+                repeating_days = [choice(self.list_of_days)]
+            else:
+                assert isinstance(params['random'], int) and params['random'] <= len(self.list_of_days), \
+                    f"Wrong random: '{params['random']}'"
+
+                repeating_days = sample(self.list_of_days, params['random'])
+                params.pop('random')
         else:
             days_before_now = filter(lambda x: isinstance(x, int), items_to_repeat)
             dates = filter(lambda x: isinstance(x, str) or isinstance(x, DATE), items_to_repeat)
@@ -1813,7 +1820,7 @@ class Vocabulary:
             **kwargs
     ):
         """
-        :param desired_word: words to search
+        :param desired_word: word to search
         :param kwargs: additional params:
             :param by_def: True – search for the word in defs, False – not
             if there is any Russian symbol – search in defs too
@@ -1855,18 +1862,14 @@ class Vocabulary:
 
 if __name__ == "__main__":
     try:
-        pass
         # init_from_xlsx('6_2_2020.xlsx')
         dictionary = Vocabulary()
-
-        dictionary.repeat('7.12.2019', mode=1)
-
+        dictionary.repeat(random=1, mode=1)
+        pass
     except Exception as trouble:
         print(trouble)
 
 # TODO: добавть возможность листать список слов в повторении
-# TODO: проверку наличия даты в файле из функции логгирования вынести в отдельную
-
 # TODO: сделать все функции выполняющими только одну поставленную задачу
 
 # TODO: создать SQL базу данных (но что делать с датами?)

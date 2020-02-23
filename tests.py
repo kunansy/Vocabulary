@@ -59,7 +59,3 @@ def test_up_word_4():
 
 def test_up_word_5():
     assert up_word('get the got would wloud enwouldy', Word('would')) == 'get the got WOULD wloud ENWOULDY'
-
-
-if __name__ == "__main__":
-    pytest.main()
