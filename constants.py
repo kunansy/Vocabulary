@@ -39,5 +39,7 @@ UNUSUAL_COMBINATIONS = ['ou', 'tre', 'nce', 'mm', 'ue', 'se']
 SYNONYMS_SEARCH_URL = "https://rusvectores.org/{model}/{word}/api/json/"
 SYNONYMS_SEARCH_MODEL = 'tayga_upos_skipgram_300_2_2019'
 
+ID_LENGTH = 16
+
 # похоже, это чудо даёт рифмовки
 # 'araneum_none_fasttextcbow_300_5_2018'
