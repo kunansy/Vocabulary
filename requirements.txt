@@ -1,7 +1,7 @@
 PyQt5==5.13.0
 PyQT5-tools==5.13.0.1.5
 xlrd==1.2.0
-XlsxWriter==1.2.7
+XlsxWriter==1.2.8
 python-docx==0.8.10
 comtypes==1.1.7
 docx==0.2.4
