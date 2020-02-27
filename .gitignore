@@ -4,15 +4,13 @@
 *.pyc
 *.mp3
 *.m4a
-Repeating_log.json
-test.bat
+*.bat
 
 .pytest_cache/
 .idea/
 __pycache__/
-Audio/
-docx/
-pdf/
-xlsx/
+user_data/
 Next_features/
-Words_Lists/
+program_data/token.pickle
+program_data/credentials.json
+program_data/client_secret.json
