@@ -1,18 +1,16 @@
 from __future__ import print_function
+
+import io
 import pickle
 import os.path
-import io
+
+from apiclient import errors
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from apiclient.http import MediaFileUpload, MediaIoBaseDownload
 
-# If modifying these scopes, delete the file token.pickle.
-SCOPES = ['https://www.googleapis.com/auth/drive']
-TOKEN = 'program_data\\token.pickle'
-CREDENTIALS = 'program_data\\credentials.json'
-FOLDER_ID = '1C990uxIFIZJOIS7ZhuXQWj4izeivTPB-'
-FILE_WITH_ID = "id.txt"
+from constants import SCOPES, TOKEN_PATH, CREDENTIALS_PATH, FOLDER_ID
 
 
 class Auth:
@@ -21,44 +19,44 @@ class Auth:
         # The file token.pickle stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
-        if os.path.exists(TOKEN):
-            with open(TOKEN, 'rb') as token:
-                creds = pickle.load(token)
+        if file_exist(TOKEN_PATH):
+            creds = self.credentials()
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    CREDENTIALS, SCOPES)
+                    CREDENTIALS_PATH, SCOPES)
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open(TOKEN, 'wb') as token:
+            with open(TOKEN_PATH, 'wb') as token:
                 pickle.dump(creds, token)
 
         self.drive_service = build('drive', 'v3', credentials=self.credentials())
 
     def credentials(self):
-        with open(TOKEN, 'rb') as file:
+        """ Получить права доступа """
+        assert file_exist(TOKEN_PATH), f"Wrong token: '{TOKEN_PATH}'"
+
+        with open(TOKEN_PATH, 'rb') as file:
             return pickle.load(file)
 
-    def list_files(self, size=10):
-        service = build('drive', 'v3', credentials=self.credentials())
-
-        # Call the Drive v3 API
-        results = service.files().list(
+    def list_items(self, size=10):
+        """ Вернуть список имени и id первых n айтемов """
+        results = self.drive_service.files().list(
             pageSize=size, fields="nextPageToken, files(id, name)").execute()
         items = results.get('files', [])
 
-        if not items:
-            print('No files found')
-        else:
-            print('\n'.join(u'{0} ({1})'.format(item['name'], item['id']) for item in items))
+        return items
 
-    def upload_file(self, file_name, file_path, mimetype='text/'):
+    def upload_file(self, file_name, file_path, mimetype='text/', folder_id=FOLDER_ID):
+        """ Залить файл на Google Drive в папку backup """
+        assert file_exist(file_path), f"Wrong file: '{file_name}', func – Auth.upload_file"
+
         file_metadata = {
             'name': file_name,
-            'parents': [FOLDER_ID]
+            'parents': [folder_id]
         }
         media = MediaFileUpload(file_path,
                                 mimetype=mimetype)
@@ -66,16 +64,11 @@ class Auth:
         file = self.drive_service.files().create(body=file_metadata,
                                                  media_body=media,
                                                  fields='id').execute()
-        file_id = file.get('id')
-        print(f"File ID: {file_id}")
 
-        with open(FILE_WITH_ID, 'w') as f:
-            f.write(file_id)
+        print(f"File: '{file_path}' successfully uploaded, ID: '{file.get('id')}'")
 
-    def download_file(self, file_id=None, file_path=''):
-        if file_id is None and os.path.exists(FILE_WITH_ID):
-            file_id = open(FILE_WITH_ID, 'r').read()
-
+    def download_file(self, file_id, file_path):
+        """ Скачать файл по ID """
         request = self.drive_service.files().get_media(fileId=file_id)
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
@@ -93,3 +86,34 @@ class Auth:
         with io.open(file_path, 'wb') as file:
             fh.seek(10)
             file.write(fh.read())
+
+    def search_item(self, item_name):
+        """ Найти айтем по имени """
+        service = build('drive', 'v3', credentials=self.credentials())
+
+        results = service.files().list(
+             fields="nextPageToken, files(id, name)", q=f"name = '{item_name}'").execute()
+        # fields(kind, mimetype)
+        items = results.get('files', [])
+
+        return items
+
+    def del_file(self, item_id):
+        """ Удалить айтем по ID """
+        try:
+            self.drive_service.files().delete(fileId=item_id).execute()
+        except errors.HttpError as error:
+            print(error)
+
+
+def print_items(items):
+    """ Распечатать айтемы, имя и ID """
+    if items:
+        print('\n'.join(u'{0} ({1})'.format(item['name'], item['id']) for item in items))
+    else:
+        print('No files found')
+
+
+def file_exist(filename):
+    """ Существует ли файл """
+    return os.path.exists(filename)

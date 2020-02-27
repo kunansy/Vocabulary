@@ -16,11 +16,14 @@ from collections import Counter
 from xlsxwriter import Workbook
 from requests import get as GET
 from datetime import date as DATE
+from os import system, getcwd, access, F_OK
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
+
 from random import sample as SAMPLE
 from random import choice as CHOICE
 from random import shuffle as SHUFFLE
-from os import system, getcwd, access, F_OK
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
+
+from backup import backup, restore
 
 
 def get_synonyms(item):
@@ -1287,8 +1290,7 @@ class Vocabulary:
 
     def get_date_list(self, by_str=False):
         """ Вернуть список дат строками или DATE-объектами """
-        by_str = DATEFORMAT if by_str else None
-        return list(map(lambda x: x.get_date(dateformat=by_str), self.list_of_days))
+        return list(map(lambda x: x.get_date(by_str), self.list_of_days))
 
     def get_date_range(self):
         """ Дата первого дня-дата последнего дня """
@@ -1516,9 +1518,9 @@ class Vocabulary:
         repeating_days.sort(key=lambda x: x.get_date(None))
 
         if len(repeating_days) > 1 and repeating_days[0].get_date() != repeating_days[-1].get_date():
-            window_title = f"{repeating_days[0].get_date(True)}-{repeating_days[-1].get_date(True)}, {len(repeating_days)} days"
+            window_title = f"{repeating_days[0].get_date()}-{repeating_days[-1].get_date()}, {len(repeating_days)} days"
         else:
-            window_title = repeating_days[0].get_date(True)
+            window_title = repeating_days[0].get_date()
 
         # Переданные айтемы могут содержать одинаковые слова
         repeating_days = sum(list(map(WordsPerDay.get_content, repeating_days)), [])
@@ -1576,8 +1578,10 @@ class Vocabulary:
         )
 
     def backup(self):
-        from backup import main
-        main()
+        backup('content', DATA)
+
+    def restore(self):
+        restore('content', 'user_data\\content_restore')
 
     def __contains__(self, item):
         """ Есть ли слово (str или Word) или WordsPerDay с такой датой (только DATE) в словаре """
@@ -1684,13 +1688,14 @@ if __name__ == "__main__":
     try:
         # init_from_xlsx('2_25_2020.xlsx', 'content')
         dictionary = Vocabulary()
-        dictionary.backup()
         # dictionary.repeat('7.12.2019', mode=1)
-        # print(get_most_difficult_words_id())
+
+        # dictionary.backup()
         pass
     except Exception as trouble:
         print(trouble)
 
+# TODO: избегать флаги как параметры функции
 # TODO: траблы с hint там, где есть собствтенные примеры
 # TODO: информация об образовательных успехах за месяц (в SQL db это будет проще и быстрее)
 # TODO: изменение размера окна, подгонять под это размер содержимого

@@ -38,8 +38,13 @@ UNUSUAL_COMBINATIONS = ['ou', 'tre', 'nce', 'mm', 'ue', 'se']
 
 SYNONYMS_SEARCH_URL = "https://rusvectores.org/{model}/{word}/api/json/"
 SYNONYMS_SEARCH_MODEL = 'tayga_upos_skipgram_300_2_2019'
+# похоже, это чудо даёт рифмовки
+# 'araneum_none_fasttextcbow_300_5_2018'
 
 ID_LENGTH = 16
 
-# похоже, это чудо даёт рифмовки
-# 'araneum_none_fasttextcbow_300_5_2018'
+# If modifying these scopes, delete the file token.pickle.
+SCOPES = ['https://www.googleapis.com/auth/drive']
+TOKEN_PATH = 'program_data\\token.pickle'
+CREDENTIALS_PATH = 'program_data\\credentials.json'
+FOLDER_ID = '1C990uxIFIZJOIS7ZhuXQWj4izeivTPB-'
