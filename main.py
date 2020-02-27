@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
 
 
 def get_synonyms(item):
-    """ Получить список связанных слов/синонимов к заданному """
+    """ Получить список связнных слов/синонимов к заданному """
     assert isinstance(item, str) or isinstance(item, Word), f"Wrong word {item}, func – get_synonyms"
 
     word = item.word if isinstance(item, Word) else item.lower().strip()
@@ -237,7 +237,7 @@ def init_from_xlsx(
     # суммирование одинаковых слов в один объект класса Word
     result = [reduce(lambda res, elem: res + elem, list(group[1]), Word('')) for group in content]
 
-    # TODO: можно ли сююда засунуть менеджер контекста?
+    # TODO: можно ли сюда засунуть менеджер контекста?
     file_out = open(out, 'a', encoding='utf-8')
 
     print(f"\n\n[{date}]", file=file_out)
@@ -388,6 +388,7 @@ def load_json_dict(filename):
 
     with open(add_ext(filename, 'json'), 'r', encoding='utf-8') as file:
         res = ''.join(file.readlines())
+    
     if res:
         return loads(res)
     return {}
@@ -920,8 +921,8 @@ class Word:
 
         return self.word[index]
 
-    # def __iter__(self):
-    #     return iter(self.word)
+    def __iter__(self):
+        return iter(self.word)
 
     def __add__(self, other):
         """
@@ -1127,8 +1128,9 @@ class WordsPerDay:
             []
         )
 
-    def get_date(self, by_str=True, dateformat=DATEFORMAT):
-        return self.date.strftime(dateformat) if by_str else self.date
+    def get_date(self, dateformat=DATEFORMAT):
+        dateformat = DATEFORMAT if dateformat is True else None
+        return self.date if dateformat is None else self.date.strftime(dateformat)
 
     def get_info(self):
         return f"{self.get_date()}\n{len(self)}"
@@ -1285,11 +1287,12 @@ class Vocabulary:
 
     def get_date_list(self, by_str=False):
         """ Вернуть список дат строками или DATE-объектами """
-        return list(map(lambda x: x.get_date(by_str=by_str), self.list_of_days))
+        by_str = DATEFORMAT if by_str else None
+        return list(map(lambda x: x.get_date(dateformat=by_str), self.list_of_days))
 
     def get_date_range(self):
         """ Дата первого дня-дата последнего дня """
-        return f"{self.begin(by_str=True)}-{self.end(by_str=True)}"
+        return f"{self.begin(True)}-{self.end(True)}"
 
     def get_item_before_now(self, days_count):
         """ Вернуть непустой день, чей индекс = len - days_count """
@@ -1348,7 +1351,7 @@ class Vocabulary:
 
         worksheet.set_column('A:A', 17)
 
-        # TODO: можно ли как-то это ускорить, ищбежав for?
+        # TODO: можно ли как-то это ускорить, избежав for?
         for row, (date, count) in enumerate([(date, count) for date, count in date_count.items()]):
             worksheet.write(row, 0, date, cell_format)
             worksheet.write(row, 1, count, cell_format)
@@ -1510,14 +1513,12 @@ class Vocabulary:
 
         assert len(repeating_days) != 0, f"Wrong item to repeat, func – Vocabulary.repeat"
 
-        repeating_days.sort(key=lambda x: x.get_date(by_str=False))
+        repeating_days.sort(key=lambda x: x.get_date(None))
 
-        # TODO: исправить проверку совпадения дат
-        if len(repeating_days) > 1 and not \
-                any(repeating_days[i - 1].get_date() == repeating_days[i].get_date() for i in range(len(repeating_days))):
-            window_title = f"{repeating_days[0].get_date()}-{repeating_days[-1].get_date()}, {len(repeating_days)} days"
+        if len(repeating_days) > 1 and repeating_days[0].get_date() != repeating_days[-1].get_date():
+            window_title = f"{repeating_days[0].get_date(True)}-{repeating_days[-1].get_date(True)}, {len(repeating_days)} days"
         else:
-            window_title = repeating_days[0].get_date()
+            window_title = repeating_days[0].get_date(True)
 
         # Переданные айтемы могут содержать одинаковые слова
         repeating_days = sum(list(map(WordsPerDay.get_content, repeating_days)), [])
@@ -1542,11 +1543,11 @@ class Vocabulary:
 
     def begin(self, by_str=False):
         """ Вернуть дату первого дня строкой или DATE-объектом """
-        return self.list_of_days[0].get_date(by_str=by_str)
+        return self.list_of_days[0].get_date(by_str)
 
     def end(self, by_str=False):
         """ Вернуть дату последнего дня строкой или DATE-объектом """
-        return self.list_of_days[-1].get_date(by_str=by_str)
+        return self.list_of_days[-1].get_date(by_str)
 
     def search_by_properties(self, *properties):
         """ Найти слова, удовлетворяющие переданным свойствам """
@@ -1573,6 +1574,10 @@ class Vocabulary:
             self.list_of_days,
             []
         )
+
+    def backup(self):
+        from backup import main
+        main()
 
     def __contains__(self, item):
         """ Есть ли слово (str или Word) или WordsPerDay с такой датой (только DATE) в словаре """
@@ -1610,14 +1615,14 @@ class Vocabulary:
             if start is not None and stop is not None and start > stop:
                 raise ValueError(f"Start '{start}' cannot be more than stop '{stop}'")
 
-            if start is not None and (start < self.list_of_days[0].date or start > self.list_of_days[-1].date):
+            if start is not None and (start < self.list_of_days[0].get_date(None) or start > self.list_of_days[-1].get_date(None)):
                 raise ValueError(f"Wrong start: '{start}'")
 
-            if stop is not None and (stop > self.list_of_days[-1].date or stop < self.list_of_days[0].date):
+            if stop is not None and (stop > self.list_of_days[-1].get_date(None) or stop < self.list_of_days[0].get_date(None)):
                 raise ValueError(f"Wrong stop: '{stop}'")
 
-            begin = start if start is None else list(map(lambda x: x.date == start, self.list_of_days)).index(True)
-            end = stop if stop is None else list(map(lambda x: x.date == stop, self.list_of_days)).index(True)
+            begin = start if start is None else list(map(lambda x: x.get_date(None) == start, self.list_of_days)).index(True)
+            end = stop if stop is None else list(map(lambda x: x.get_date(None) == stop, self.list_of_days)).index(True)
 
             return self.__class__(self.list_of_days[begin:end])
 
@@ -1628,7 +1633,7 @@ class Vocabulary:
         if item not in self.get_date_list():
             return WordsPerDay([], item)
 
-        return list(filter(lambda x: item == x.date, self.list_of_days))[0]
+        return list(filter(lambda x: item == x.get_date(None), self.list_of_days))[0]
 
     def __call__(self, item, **kwargs):
         """ Вернуть все найденные слова строкой;
@@ -1678,24 +1683,23 @@ class Vocabulary:
 if __name__ == "__main__":
     try:
         # init_from_xlsx('2_25_2020.xlsx', 'content')
-        # dictionary = Vocabulary()
-        # dictionary.repeat(random=5, mode=1)
-        print(get_most_difficult_words_id())
+        dictionary = Vocabulary()
+        dictionary.backup()
+        # dictionary.repeat('7.12.2019', mode=1)
+        # print(get_most_difficult_words_id())
         pass
     except Exception as trouble:
         print(trouble)
 
+# TODO: траблы с hint там, где есть собствтенные примеры
 # TODO: информация об образовательных успехах за месяц (в SQL db это будет проще и быстрее)
 # TODO: изменение размера окна, подгонять под это размер содержимого
-# TODO: добавить самостоятельный ввод слов при повторении
-# TODO: объединить в один запуск: mode=1, mode=2, повторение вводом с клавиатуры
-# TODO: вернуть транскрипцию в запоминание; проверка: x == ламбда иницилизации копки
-# TODO: предупреждении об отсутствии какого-либо элемента: слово, одно из определений etc
+# TODO: вернуть транскрипцию в запоминание;
+# TODO: предупреждении об отсутствии какого-либо элемента: слова, одного из определений etc
 # TODO: проверка на наличие изученного слова в db в init_from_xlsx, ведь id должен быть уникален
 # TODO: напоминание по картинкам из Google
 
-# TODO: добавить повторение в два этапа: mode=1, mode=2; выводить id слов из первого случая в файл (json, db)
-#  сначала слова повторяются в mode=1, потом в mode=2; записывать именно набор слов из mode=1
+# TODO: добавить повторение в два этапа: mode=1, mode=2; повторение вводом с клавиатуры;
 
 # TODO: добавить возможность листать список слов в повторении
 # TODO: сделать все функции выполняющими только одну поставленную задачу
@@ -1704,18 +1708,16 @@ if __name__ == "__main__":
 #  id – дата изучения (DEFAULT - TODAY) – слово – транскрипция – свойства – английское определение – русское определение
 
 # TODO: создать SQL базу данных примеров (или json-файл с ними):
-#  id присутствующих в оригинальном тексте слов, за исключением артиклей, предлогов и прочих единичных айтемов, – оригинальный текст – перевод
+#  id слов оригинального текста, за исключением артиклей, предлогов и прочего, – оригинальный текст – перевод
 
 # TODO: парсер html – добавить возможность получать примеры употребления слов
 #  из параллельного подкоруса в составе НКРЯ, BNC или COCA
 
 # TODO: автономная работа RepeatWords класса: можно передавать некоторый список Word-объектов для
 #  повторения извне, а можно работать с умолчательной db:
-# TODO: окно с галочками для выбора дней для повторения
-# TODO: окно с вводом свойств слов для повторения
+#  1. окно с галочками для выбора дней для повторения;
+#  2. окно с вводом свойств слов для повторения
 
-# TODO: принести внутреннюю работу со словами к работе с их id
 # TODO: кодировка для транскрипции в кнопках
 # TODO: написать тесты
-# TODO: добавить возможность вместо списка в функции передовать итератор, преобразовывать его к списку внутри
 # TODO: backup на Google Drive
