@@ -3,19 +3,22 @@ from constants import *
 
 
 from sys import argv
-from PyQt5 import uic as UIC
-from requests import get as GET
 from docx import Document
 from docx.shared import Pt
 from hashlib import sha3_512
 from functools import reduce
 from json import loads, dump
+from PyQt5 import uic as UIC
 from itertools import groupby
 from datetime import datetime
 from xlrd import open_workbook
+from collections import Counter
 from xlsxwriter import Workbook
+from requests import get as GET
 from datetime import date as DATE
-from random import shuffle as SHUFFLE, sample as SAMPLE, choice as CHOICE
+from random import sample as SAMPLE
+from random import choice as CHOICE
+from random import shuffle as SHUFFLE
 from os import system, getcwd, access, F_OK
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
 
@@ -356,31 +359,31 @@ def word_id(item):
 
 def search_by_attribute(sample, item):
     """ Ищет в выборке объект класса Word, один из атрибутов которого соответствует искомому айтему """
-    assert isinstance(sample, list) and len(sample) and isinstance(sample[0], Word), \
+    assert isinstance(sample, list) and sample and all(isinstance(i, Word) for i in sample), \
         f"Wrong words_list: '{sample}', func – search_by_attribute"
     assert isinstance(item, str) or isinstance(item, Word), \
         f"Wrong item: '{item}', func – search_by_attribute"
 
     item = item.lower().strip() if isinstance(item, str) else item.word
 
+    # Если в переданном айтеме есть русский символ – соответствие
+    # может быть только с русским определением
     if is_russian(item):
         try:
             return list(filter(lambda x: x.get_russian(def_only=True).lower() == item, sample))[0]
         except:
             return f"Not found word, which attributes fit with item: '{item}' in the sample: '{sample}'"
 
-    in_learned = list(filter(lambda x: x.get_learned(def_only=True).lower() == item, sample))
+    # Поиск соответствия в самих словах
+    in_word = list(filter(lambda x: x.word == item, sample))
     try:
-        return in_learned[0] if len(in_learned) else list(filter(lambda x: x.word == item, sample))[0]
+        return in_word[0] if len(in_word) else list(filter(lambda x: x.get_learned(def_only=True).lower() == item, sample))[0]
     except:
         return f"Not found word, which attributes fit with item: '{item}' in the sample: '{sample}'"
 
 
 def load_json_dict(filename):
-    """
-    :param filename: имя json файла, из которого будет загружен лог повторений слов
-    :return: json лог повторения слов или пустой словарь
-    """
+    """ Вернуть json-словарь из файла или пустой словарь в случае пустого файла """
     assert file_exist(filename, 'json'), f"Wrong file: {filename}, func – load_json_dict"
 
     with open(add_ext(filename, 'json'), 'r', encoding='utf-8') as file:
@@ -391,11 +394,7 @@ def load_json_dict(filename):
 
 
 def dump_json_dict(data, filename):
-    """
-    :param data: данные для вывода в файл
-    :param filename: имя файла, в который словарь будет выведен
-    :return: выводит в json-файл словарь с отступом в 2 пробела
-    """
+    """ Вывести json-словарь в json-файл с отступом = 2 """
     assert isinstance(data, dict), f"Wrong data: '{data}', func – dump_json_dict"
 
     with open(add_ext(filename, 'json'), 'w') as file:
@@ -403,21 +402,43 @@ def dump_json_dict(data, filename):
 
 
 def get_current_date(dateformat=DATEFORMAT):
+    """ Получить текущую дату в строковом/DATE формате:
+        формат is None – DATE, иначе – в соответствии с dateformat
     """
-    :param dateformat: формат даты, по умолчанию: dd.mm.yy
-    :return: текущую дату в соответствующем строковом формате
-    """
-    return datetime.now().strftime(dateformat)
+    return datetime.now().date() if dateformat is None else datetime.now().strftime(dateformat)
 
 
 def get_most_difficult_words_id(count=None):
-    """ Вернёт список уникальных id самых труднозапоминаемых слов """
+    """ Вернёт список уникальных id первых n самых труднозапоминаемых слов из лога запоминаний """
     log_dict = load_json_dict(REPEAT_LOG_FILENAME)
 
-    most_error_count = sorted(log_dict, key=lambda x: len(log_dict.get(x)), reverse=True)
-    variants = sum([[j for j in filter(lambda x: log_dict[i][x] != 1, log_dict[i])] for i in most_error_count], [])
+    # лог запоминаний бывает пустым
+    if not log_dict:
+        return []
 
-    return list(set(tuple(most_error_count + variants)))[:count]
+    # постановка вперёд слов с наибольшим количеством ошибочных вариантов
+    # и наибольшим количеством выбора этих вариантов
+    most_error_count = dict(sorted(log_dict.items(), key=lambda t: len(t[1]) + sum(t[1].values()), reverse=True))
+
+    # преобразование в пары: id слова – его 'значимость'
+    # 'значимость' – (сумма количества ошибочных вариантов и количества выбора этих вариантов)
+    id_to_worth = {key: len(val) + sum(val.values()) for key, val in most_error_count.items()}
+
+    # пары: id – количество слов, для которых данное является
+    # ошибочным вариантом (при кол-ве ошибочных выборов > 1)
+    # TODO: переработать
+    mistaken_variants = sum([[j for j in filter(lambda x: log_dict[i][x] != 1, log_dict[i])] for i in most_error_count], [])
+
+    for key, val in Counter(mistaken_variants).items():
+        if key in id_to_worth:
+            id_to_worth[key] += val
+        else:
+            id_to_worth[key] = val
+
+    # сортировка слов по значимости после её изменения
+    id_to_worth = dict(sorted(id_to_worth.items(), key=lambda x: x[1], reverse=True))
+
+    return list(id_to_worth.keys())[:count]
 
 
 class RepeatWords(QMainWindow):
@@ -444,6 +465,8 @@ class RepeatWords(QMainWindow):
         self.initUI(window_title)
 
         self.word = Word('')
+        # self.repeating_word_index = None
+        # self.repeated_words_indexes = []
         SHUFFLE(words)
         self.words = words[:]
         self.wrong_translations = list(reversed(words[:]))
@@ -491,28 +514,21 @@ class RepeatWords(QMainWindow):
         self.ShowButton.setText('Show')
 
     def init_fit_mode(self):
+        """ Работа в соответствии с mode """
         self.are_you_right = lambda x: x.lower() == self.init_button(self.word).lower()
-        # TODO: а можно ли self.are_you_right = lambda x: x.lower() == self.set_main_word.lower()?
-        if self.mode == 1:
-            # self.are_you_right = lambda x: x.lower() == self.word.get_russian(def_only=True)
-            self.init_button = lambda x: x.get_russian(def_only=True).capitalize()
-            self.main_item = self.word.word.capitalize()
-        elif self.mode == 2:
-            # self.are_you_right = lambda x: x.lower() == self.init_button(self.word).lower()
-            # self.set_main_word = lambda x: x.get_russian(def_only=True).capitalize()
-            self.init_button = lambda x: x.word.capitalize()
-            self.main_item = self.word.get_russian(def_only=True).capitalize()
 
-        elif self.mode == 3:
-            # self.are_you_right = lambda x: x.lower() == self.word.get_russian(def_only=True)
-            # self.set_main_word = lambda x: x.get_learned(def_only=True).capitalize()
+        if self.mode == 1:
             self.init_button = lambda x: x.get_russian(def_only=True).capitalize()
-            self.main_item = self.word.get_learned(def_only=True).capitalize()
+            self.main_item = lambda: self.word.word.capitalize()
+        elif self.mode == 2:
+            self.init_button = lambda x: x.word.capitalize()
+            self.main_item = lambda: self.word.get_russian(def_only=True).capitalize()
+        elif self.mode == 3:
+            self.init_button = lambda x: x.get_russian(def_only=True).capitalize()
+            self.main_item = lambda: self.word.get_learned(def_only=True).capitalize()
         elif self.mode == 4:
-            # self.are_you_right = lambda x: x.lower() == self.word.get_learned(def_only=True)
-            # self.set_main_word = lambda x: x.get_russian(def_only=True).capitalize()
             self.init_button = lambda x: x.get_learned(def_only=True).capitalize()
-            self.main_item = self.word.get_russian(def_only=True).capitalize()
+            self.main_item = lambda: self.word.get_russian(def_only=True).capitalize()
 
     def test(self):
         # чтобы не остаться с пустым списком ошибочных переводов под конец
@@ -525,13 +541,14 @@ class RepeatWords(QMainWindow):
             self.WordsRemainLabel.setText(f"Remain {len(self.words)} words")
 
         self.word = CHOICE(self.words)
-
-        # TODO: переделать для возможости листать: итератор на повторяемое сейчас слово,
+        # self.repeating_word_index = CHOICE(range(len(self.words)))
+        # self.repeating_word = CHOICE([iter(i) for i in self.words])
+        # TODO: переделать для возможости листать: итератор (индекс?) на повторяемое сейчас слово,
         #   удаляющий его после выбора верного варианта
         self.words.remove(self.word)
         self.wrong_translations.remove(self.word)
 
-        self.WordToReapeatBrowser.setText(self.main_item)
+        self.WordToReapeatBrowser.setText(self.main_item())
 
         self.set_buttons()
 
@@ -553,11 +570,17 @@ class RepeatWords(QMainWindow):
             else:
                 self.choice_buttons[i].setText(self.init_button(w_item))
 
-    def show_result(
-            self,
-            result,
-            style
-    ):
+    # def next(self):
+    #     if self.repeating_word_index < len(self.words):
+    #         self.repeating_word_index += 1
+    #         self.text()
+    #
+    # def past(self):
+    #     if self.repeating_word_index > 0:
+    #         self.repeating_word_index -= 1
+    #         self.test()
+
+    def show_result(self, result, style):
         self.MessageWindow.display(
             message=result,
             style=style
@@ -597,6 +620,7 @@ class RepeatWords(QMainWindow):
             )
 
     def hint(self):
+        """ Показать подсказку: связные слова и собственные примеры """
         try:
             synonyms = get_synonyms(self.word.word)
         except:
@@ -624,30 +648,23 @@ class RepeatWords(QMainWindow):
         self.show_words()
 
     def close(self):
-        """
-        :return: по нажатии на копку 'Exit' закроет все окна
-        """
+        """ По нажатии на кнопку 'Exit' закрыть все окна """
         self.AlertWindow.close()
         self.MessageWindow.close()
         self.ShowWindow.close()
         super().close()
 
-    def log(
-            self,
-            item,
-            w_choice
-    ):
-        """
-        :param item: слово, str или Word
-        :param w_choice: ошибочный вариант
-        :return: логгирование в файл ошибочных вариантов в виде json:
-        {id_слова: {id ошибочного варианта: количество ошибок}}
+    def log(self, item, w_choice):
+        """ Логгирование в файл ошибочных вариантов в json:
+            {id_слова: {id ошибочного варианта: количество ошибок}}
         """
         assert file_exist(self.log_filename, 'json'), "Wrong log file, func – RepeatWords.log"
         assert isinstance(item, str) or isinstance(item, Word), f"Wrong word: '{item}', func – RepeatWords.log"
         assert isinstance(w_choice, str) and w_choice, f"Wrong w_choice: '{w_choice}', func – RepeatWords.log"
 
         repeating_word_id = item.get_id() if isinstance(item, Word) else word_id(item)
+
+        # Найти id слова по выбранному варианту:
         wrong_choice_id = search_by_attribute(self.wrong_translations, w_choice).get_id()
 
         data = load_json_dict(self.log_filename)
@@ -711,18 +728,13 @@ class Message(QWidget):
         self.setWindowTitle('Message')
         self.MessageText.setText('')
 
-    def display(
-            self,
-            message,
-            style=''
-    ):
+    def display(self, message, style=''):
         assert isinstance(message, str), f"Wrong message: '{message}', func – Message.display"
 
         if style:
             self.MessageText.setStyleSheet(style)
 
         self.MessageText.setText(message)
-
         self.show()
 
 
@@ -908,8 +920,8 @@ class Word:
 
         return self.word[index]
 
-    def __iter__(self):
-        return iter(self.word)
+    # def __iter__(self):
+    #     return iter(self.word)
 
     def __add__(self, other):
         """
@@ -1466,20 +1478,27 @@ class Vocabulary:
             Выбор слов для повторения:
                 1. Если это int: день, чей индекс равен текущему - int_value;
                 2. Если это str или DATE: день с такой датой;
-                3. random=n: 'random' – либо n случайных дней, либо один случайный;
-                4. 'most_difficult': слова из лога повторений
+                3. random=n: один либо n случайных дней;
+                4. most_difficult=n: n либо все слова из лога повторений
         """
         if 'random' in items_to_repeat or 'random' in params:
             if 'random' in items_to_repeat:
                 repeating_days = [CHOICE(self.list_of_days)]
             else:
                 assert isinstance(params['random'], int) and params['random'] <= len(self.list_of_days), \
-                    f"Wrong random value: '{params['random']}'"
+                    f"Wrong random value: '{params['random']}', func – Vocabulary.repeat"
 
                 repeating_days = SAMPLE(self.list_of_days, params['random'])
                 params.pop('random')
-        elif 'most_difficult' in items_to_repeat:
-            repeating_days = [WordsPerDay(self.search_by_id(*get_most_difficult_words_id()), get_current_date())]
+        elif 'most_difficult' in items_to_repeat or 'most_difficult' in params:
+            if 'most_difficult' in items_to_repeat:
+                repeating_days = [WordsPerDay(self.search_by_id(*get_most_difficult_words_id()), get_current_date())]
+            else:
+                count = params['most_difficult']
+                assert isinstance(count, int), f"Wrong most_difficult: '{count}'"
+
+                repeating_days = [WordsPerDay(self.search_by_id(*get_most_difficult_words_id(count)), get_current_date())]
+                params.pop('most_difficult')
         else:
             days_before_now = filter(lambda x: isinstance(x, int), items_to_repeat)
             dates = filter(lambda x: isinstance(x, str) or isinstance(x, DATE), items_to_repeat)
@@ -1659,12 +1678,14 @@ class Vocabulary:
 if __name__ == "__main__":
     try:
         # init_from_xlsx('2_25_2020.xlsx', 'content')
-        dictionary = Vocabulary()
-        # dictionary.repeat('25.2.2020', mode=2)
+        # dictionary = Vocabulary()
+        # dictionary.repeat(random=5, mode=1)
+        print(get_most_difficult_words_id())
         pass
     except Exception as trouble:
         print(trouble)
 
+# TODO: информация об образовательных успехах за месяц (в SQL db это будет проще и быстрее)
 # TODO: изменение размера окна, подгонять под это размер содержимого
 # TODO: добавить самостоятельный ввод слов при повторении
 # TODO: объединить в один запуск: mode=1, mode=2, повторение вводом с клавиатуры
