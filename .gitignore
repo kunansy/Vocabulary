@@ -10,7 +10,5 @@
 .idea/
 __pycache__/
 user_data/
+program_data/
 Next_features/
-program_data/token.pickle
-program_data/credentials.json
-program_data/client_secret.json
