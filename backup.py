@@ -4,13 +4,12 @@ import io
 import pickle
 import os.path
 
-from apiclient import errors
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from apiclient.http import MediaFileUpload, MediaIoBaseDownload
 
-from constants import SCOPES, TOKEN_PATH, CREDENTIALS_PATH, FOLDER_ID
+from constants import SCOPES, TOKEN_PATH, CREDS_PATH, BACKUP_FOLDER_ID
 
 
 class Auth:
@@ -18,39 +17,48 @@ class Auth:
         creds = None
         # The file token.pickle stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
-        # time.
+        # time
         if file_exist(TOKEN_PATH):
-            creds = self.credentials()
-        # If there are no (valid) credentials available, let the user log in.
+            creds = self.creds()
+        # If there are no (valid) credentials available, let the user log in
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
+                # Save the credentials for the next run
+                self.dump(creds)
             else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    CREDENTIALS_PATH, SCOPES)
-                creds = flow.run_local_server(port=0)
-            # Save the credentials for the next run
-            with open(TOKEN_PATH, 'wb') as token:
-                pickle.dump(creds, token)
+                self.login()
 
         self.drive_service = build('drive', 'v3', credentials=creds)
 
-    def credentials(self):
-        """ Получить права доступа """
+    def creds(self):
+        """ Считать права доступа """
         assert file_exist(TOKEN_PATH), f"Wrong token: '{TOKEN_PATH}'"
 
         with open(TOKEN_PATH, 'rb') as file:
             return pickle.load(file)
 
+    def dump(self, creds):
+        """ Вывести права доступа в файл """
+        with open(TOKEN_PATH, 'wb') as token:
+            pickle.dump(creds, token)
+
+    def login(self):
+        """ Получить права доступа и вывести их в файл """
+        flow = InstalledAppFlow.from_client_secrets_file(
+            CREDS_PATH, SCOPES)
+        creds = flow.run_local_server(port=0)
+
+        self.dump(creds)
+
     def list_items(self, size=10):
-        """ Вернуть список имени и id первых n айтемов """
+        """ Вернуть список имён и ID первых n айтемов """
         results = self.drive_service.files().list(
             pageSize=size, fields="nextPageToken, files(id, name)").execute()
-        items = results.get('files', [])
+        return results.get('files', [])
 
-        return items
-
-    def upload_file(self, file_name, file_path, mimetype='text/', folder_id=FOLDER_ID):
+    def upload_file(self, file_name, file_path,
+                    mimetype='text/', folder_id=BACKUP_FOLDER_ID):
         """ Залить файл на Google Drive в папку backup """
         assert file_exist(file_path), f"Wrong file: '{file_name}', func – Auth.upload_file"
 
@@ -65,11 +73,10 @@ class Auth:
                                                  media_body=media,
                                                  fields='id').execute()
 
-        print(f"File: '{file_path}' successfully uploaded, ID: '{file.get('id')}'")
+        return file.get('id')
 
     def download_file(self, file_id, file_path):
         """ Скачать файл по ID """
-        # TODO: не может качать медифайлы
         request = self.drive_service.files().get_media(fileId=file_id)
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
@@ -93,16 +100,11 @@ class Auth:
         results = self.drive_service.files().list(
              fields="nextPageToken, files(id, name)", q=f"name = '{item_name}'").execute()
         # fields(kind, mimetype)
-        items = results.get('files', [])
+        return results.get('files', [])
 
-        return items
-
-    def del_file(self, item_id):
+    def del_item(self, item_id):
         """ Удалить айтем по ID """
-        try:
-            self.drive_service.files().delete(fileId=item_id).execute()
-        except errors.HttpError as error:
-            print(error)
+        self.drive_service.files().delete(fileId=item_id).execute()
 
 
 def print_items(items):
@@ -113,6 +115,6 @@ def print_items(items):
         print('No files found')
 
 
-def file_exist(filename):
+def file_exist(f_name):
     """ Существует ли файл """
-    return os.path.exists(filename)
+    return os.path.exists(f_name)
