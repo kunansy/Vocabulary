@@ -16,14 +16,18 @@ from collections import Counter
 from xlsxwriter import Workbook
 from requests import get as GET
 from datetime import date as DATE
-from os import system, getcwd, access, F_OK
+from os import system, getcwd
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
 
 from random import sample as SAMPLE
 from random import choice as CHOICE
 from random import shuffle as SHUFFLE
 
-from backup import backup, restore
+from examples import Examples
+from backup_setup import backup
+from common_funcs import file_name, file_exist, \
+    add_ext, add_to_file_name
+from examples import SelfExamples, CorpusExamples
 
 
 def get_synonyms(item):
@@ -61,18 +65,13 @@ def str_to_date(string, swap=False):
     day, month, year = int(day[:2]), int(month[:2]), int(year[:4])
 
     return DATE(year, day, month) if swap else DATE(year, month, day)
-    
-
-def file_exist(filename, extension=''):
-    """ Существует ли файл с переданным именем и расширением """
-    return access(add_ext(filename, extension), F_OK)
 
 
-def init_vocabulary_from_file(filename=DATA):
+def init_vocabulary_from_file(f_name=DATA_PATH):
     # TODO: Удалить после перехода к db
-    assert file_exist(filename), f"Wrong file: '{filename}', func – init_vocabulary_from_file"
+    assert file_exist(f_name), f"Wrong file: '{f_name}', func – init_vocabulary_from_file"
 
-    with open(filename, 'r', encoding='utf-8') as file:
+    with open(f_name, 'r', encoding='utf-8') as file:
         content = file.readlines()
         dates = map(lambda x: str_to_date(x).strftime(DATEFORMAT), filter(lambda x: x.startswith('[') and '/' not in x, content))
 
@@ -82,11 +81,6 @@ def init_vocabulary_from_file(filename=DATA):
         words_per_day = [WordsPerDay(map(Word, content[begin(i) + 1: end(i)]), i) for i in dates]
     file.close()
     return words_per_day
-
-
-def add_ext(name, extension=''):
-    """ Добавить к имени файла переданное расширение, если его в нём нет """
-    return name if name.endswith(f".{extension}") else f"{name}.{extension}"
 
 
 def language(item: str):
@@ -144,23 +138,22 @@ def up_word_in_def(string, item):
     return string[:string.index('–')] + up_word(string[string.index('–'):], word)
 
 
-def does_word_fit_with_american_spelling(word: str, by_str=True):
+def correct_spelling(word: str, by_str=True):
     """ Проверить, соответствует ли слово американской манере письма """
-    # TODO
     assert isinstance(word, str) or isinstance(word, list), \
-        f"Wrong word: '{word}', func – does_word_fit_with_american_spelling"
+        f"Wrong word: '{word}', func – correct_spelling"
 
-    word = ''.join(word) if isinstance(word, list) else word
+    words = word.split() if isinstance(word, str) else word
 
-    if (word.endswith('re') and not word.endswith('ogre')) or \
-            any(i in word for i in UNUSUAL_COMBINATIONS) or \
-            any(word[i] == 'l' and word[i + 1] != 'l' for i in range(len(word) - 1)):
+    if any(i.endswith('re') and not i.endswith('ogre') for i in words) or \
+            any(i.lower().endswith(j) or 'll' in i for i in words for j in W_MIXES):
         return f"Probably, there are wrong combinations in the word '{word}'" if by_str else False
+
     return "OK" if by_str else True
 
 
 def parse_str(string):
-    """ Разбирает строку на: термин, свойства, английское определение, русское, пример употребления """
+    """ Разбирает строку на: термин, свойства, английское определение, русское """
     # TODO: Удалить после перехода к db
     word_properties, other = string.split(' – ')
 
@@ -177,12 +170,6 @@ def parse_str(string):
 
     else:
         transcription = ''
-
-    example = []
-    if 'Example: ' in other:
-        ex_index = other.index('Example: ')
-        example = list(filter(len, map(str.strip, other[ex_index + 8:].split(';'))))
-        other = other[:ex_index]
 
     if other:
         if is_russian(other):
@@ -202,14 +189,11 @@ def parse_str(string):
     if any('.' in i for i in learned):
         print(f"There is wrong symbol in the definition of the word '{word}'")
 
-    return word, transcription, properties, learned, russian, example
+    return word, transcription, properties, learned, russian
 
 
-def init_from_xlsx(
-        filename,
-        out='tmp',
-        date=None
-):
+def init_from_xlsx(filename, out='tmp',
+                   date=None):
     """ Преобразовать xlsx файл в список объектов класса Word, вывести их в файл с дополнением старого содержимого """
     # TODO: Редактировать после перехода к db
     assert file_exist(filename), f"Wrong file: '{filename}', func – init_from_xlsx"
@@ -240,39 +224,33 @@ def init_from_xlsx(
     # суммирование одинаковых слов в один объект класса Word
     result = [reduce(lambda res, elem: res + elem, list(group[1]), Word('')) for group in content]
 
-    # TODO: можно ли сюда засунуть менеджер контекста?
-    file_out = open(out, 'a', encoding='utf-8')
-
-    print(f"\n\n[{date}]", file=file_out)
-    print(*result, sep='\n', file=file_out)
-    print(f"[/{date}]", file=file_out)
-
-    file_out.close()
+    with open(out, 'a', encoding='utf-8') as f:
+        f.write(f"\n\n[{date}]\n")
+        f.write('\n'.join(map(str, result)))
+        f.write(f"\n[/{date}]\n")
 
 
-def create_docx(
-        content,
-        out_file=None,
-        header='General',
-        russian_only=False
-):
-    """ Вывести в docx-файл переданный контент (str или Word), умолчательное имя файла – заголовок, 'General';
+def create_docx(content, f_name=None,
+                header='General'):
+    """ Вывести в docx-файл переданный контент (str или Word),
+        умолчательное имя файла – заголовок, 'General';
         в качестве заголовка стоит передавать date_range();
         если выходной файл с таким именем уже существует – не создавать новый;
-        russian_only: True: Слово – русское определение; False: стандартный Word-вывод
     """
-    assert isinstance(content, list) and len(content), f"Wrong content '{content}', func – create_docx"
-    assert isinstance(header, str) and len(header) > 1, f"Wrong header '{header}', func – create_docx"
-    assert isinstance(russian_only, bool), f"Wrong russian_only '{russian_only}', func – create_docx"
+    assert isinstance(content, list) and content, \
+        f"Wrong content: '{content}', list expected, func – create_docx"
+    assert isinstance(header, str) and header, \
+        f"Wrong header: '{header}', str expected, func – create_docx"
 
-    out_file = f"{header}.{DOC_EXT}" if out_file is None else add_ext(out_file, DOC_EXT)
+    f_name = f"{header}.{DOC_EXT}" if f_name is None else add_ext(f_name, DOC_EXT)
 
-    if file_exist(f"{DOC_FOLDER}\\{out_file}"):
-        print(f"docx file with name '{out_file}' still exist")
+    if file_exist(f"{DOC_FOLDER}\\{f_name}"):
+        print(f"Document named '{f_name}' still exist")
         return
 
     docx_document = Document()
 
+    # Шрифт и его размер
     doc_style = docx_document.styles['Normal']
     font = doc_style.font
     font.name = 'Avenir Next Cyr'
@@ -290,32 +268,25 @@ def create_docx(
             new_paragraph.add_run(f"{word[0].upper()}{word[1:]}")
         elif isinstance(word, Word):
             new_paragraph.add_run(f"{word.word}".capitalize()).bold = True
+            new_paragraph.add_run(f" – {word.get_learned(def_only=True)} {word.get_russian(def_only=True)}")
 
-            if russian_only:
-                new_paragraph.add_run(f" – {word.get_russian(def_only=True)}")
-            else:
-                new_paragraph.add_run(f" – {word.get_learned(def_only=True)} {word.get_russian(def_only=True)}")
-
-    docx_document.save(f"{getcwd()}\\{DOC_FOLDER}\\{out_file}")
+    # TODO: можно убрать полный путь?
+    docx_document.save(f"{getcwd()}\\{DOC_FOLDER}\\{f_name}")
 
 
-def create_pdf(
-        content,
-        in_file=None,
-        out_file=None,
-        russian_only=False
-):
-    """ Вывести в docx-файл переданный контент (str или Word);
+def create_pdf(content, in_file=None,
+               out_file=None):
+    """ Вывести в pdf-файл переданный контент (str или Word) через docx-файл;
         если выходной файл с таким именем уже существует – не создавать новый;
         если входного docx-файла нет – создать его и преобразовать к pdf
-        russian_only: True: Слово – русское определение; False: стандартный Word-вывод
     """
-    assert isinstance(content, list) and content, f"Wrong content: '{content}', func – create_pdf"
-    assert isinstance(out_file, str), f"Wrong out_file: '{out_file}', func – create_pdf"
-    assert isinstance(russian_only, bool), f"Wrong russian_only: '{russian_only}', func – create_pdf"
+    assert isinstance(content, list) and content, \
+        f"Wrong content: '{content}', list expected, func – create_pdf"
+    assert isinstance(out_file, str), \
+        f"Wrong out_file type: '{out_file}', str expected, func – create_pdf"
 
     if file_exist(f"{PDF_FOLDER}\\{out_file}", PDF_EXT):
-        print(f"PDF-file with name '{out_file}' still exist")
+        print(f"PDF-file named '{out_file}' still exist")
         return
 
     # нужно ли удалять файл потом
@@ -325,11 +296,7 @@ def create_pdf(
         temp_file_created = True
         in_file = f"temp.{DOC_EXT}"
 
-        create_docx(
-            content,
-            out_file=in_file,
-            russian_only=russian_only
-        )
+        create_docx(content, f_name=in_file)
 
     in_file = add_ext(in_file, DOC_EXT)
     out_file = add_ext(out_file, PDF_EXT)
@@ -342,15 +309,17 @@ def create_pdf(
     microsoft_word_client.Quit()
 
     if temp_file_created:
+        # если временный файл был создан,
+        # то его нужно удалить
         system(f'del "{getcwd()}\\{DOC_FOLDER}\\{in_file}"')
 
 
 def word_id(item):
-    """ Получить id переданного строкой или Word-объектом слова
-        id – первые и последние восемь символов sha3_512 хеша этого слова
+    """ Получить ID переданного строкой или Word-объектом слова
+        ID – первые и последние восемь символов sha3_512 хеша этого слова
     """
     assert isinstance(item, str) or isinstance(item, Word), f"Wrong word: '{item}', func – word_id"
-    # пустой item – пустой id
+    # пустой item – пустой ID
     if not item:
         return ''
 
@@ -413,8 +382,8 @@ def get_current_date(dateformat=DATEFORMAT):
 
 
 def get_most_difficult_words_id(count=None):
-    """ Вернёт список уникальных id первых n самых труднозапоминаемых слов из лога запоминаний """
-    log_dict = load_json_dict(REPEAT_LOG_FILENAME)
+    """ Вернёт список уникальных ID первых n самых труднозапоминаемых слов из лога запоминаний """
+    log_dict = load_json_dict(REPEAT_LOG_PATH)
 
     # лог запоминаний бывает пустым
     if not log_dict:
@@ -422,13 +391,15 @@ def get_most_difficult_words_id(count=None):
 
     # постановка вперёд слов с наибольшим количеством ошибочных вариантов
     # и наибольшим количеством выбора этих вариантов
-    most_error_count = dict(sorted(log_dict.items(), key=lambda t: len(t[1]) + sum(t[1].values()), reverse=True))
+    most_error_count = dict(sorted(log_dict.items(),
+                                   key=lambda t: len(t[1]) + sum(t[1].values()),
+                                   reverse=True))
 
-    # преобразование в пары: id слова – его 'значимость'
+    # преобразование в пары: ID слова – его 'значимость'
     # 'значимость' – (сумма количества ошибочных вариантов и количества выбора этих вариантов)
     id_to_worth = {key: len(val) + sum(val.values()) for key, val in most_error_count.items()}
 
-    # пары: id – количество слов, для которых данное является
+    # пары: ID – количество слов, для которых данное является
     # ошибочным вариантом (при кол-ве ошибочных выборов > 1)
     # TODO: переработать
     mistaken_variants = sum([[j for j in filter(lambda x: log_dict[i][x] != 1, log_dict[i])] for i in most_error_count], [])
@@ -446,18 +417,18 @@ def get_most_difficult_words_id(count=None):
 
 
 class RepeatWords(QMainWindow):
-    def __init__(
-            self,
-            words,
-            mode=1,
-            window_title='Repeat'
-    ):
-        assert file_exist(MAIN_WINDOW_PATH), "Main window does not exist, func – RepeatWords.__init__"
-        assert file_exist(ALERT_WINDOW_PATH), "Alert window does not exist, func – RepeatWords.__init__"
-        assert file_exist(MESSAGE_WINDOW_PATH), "Message window does not exist, func – RepeatWords.__init__"
-        assert file_exist(SHOW_WINDOW_PATH), "Show window does not exist, func – RepeatWords.__init__"
+    def __init__(self, words, mode=1,
+                 window_title='Repeat'):
+        assert file_exist(MAIN_WINDOW_PATH), \
+            "Main window does not exist, func – RepeatWords.__init__"
+        assert file_exist(ALERT_WINDOW_PATH), \
+            "Alert window does not exist, func – RepeatWords.__init__"
+        assert file_exist(MESSAGE_WINDOW_PATH), \
+            "Message window does not exist, func – RepeatWords.__init__"
+        assert file_exist(SHOW_WINDOW_PATH), \
+            "Show window does not exist, func – RepeatWords.__init__"
 
-        assert isinstance(words, list) and len(words) and all(isinstance(i, Word) for i in words), \
+        assert isinstance(words, list) and words and all(isinstance(i, Word) for i in words), \
             f"Wrong words: '{words}', func – RepeatWords.__init__"
         assert (isinstance(mode, int) and mode in range(1, 5)) or (isinstance(mode, str) and mode in REPEATING_MODS), \
             f"Wrong mode: '{mode}', func – RepeatWords.__init__"
@@ -474,6 +445,9 @@ class RepeatWords(QMainWindow):
         SHUFFLE(words)
         self.words = words[:]
         self.wrong_translations = list(reversed(words[:]))
+
+        # для получения примеров
+        self.examples = Examples()
         
         self.mode = None
         self.are_you_right = None
@@ -487,9 +461,8 @@ class RepeatWords(QMainWindow):
 
         self.init_fit_mode()
 
-        self.log_filename = add_ext(REPEAT_LOG_FILENAME, 'json')
         if not file_exist(self.log_filename):
-            with open(self.log_filename, 'w', encoding='utf-8'): pass
+            with open(REPEAT_LOG_PATH, 'w', encoding='utf-8'): pass
 
     def initUI(self, window_title):
         self.AlertWindow = Alert(self, [])
@@ -547,8 +520,6 @@ class RepeatWords(QMainWindow):
         self.word = CHOICE(self.words)
         # self.repeating_word_index = CHOICE(range(len(self.words)))
         # self.repeating_word = CHOICE([iter(i) for i in self.words])
-        # TODO: переделать для возможости листать: итератор (индекс?) на повторяемое сейчас слово,
-        #   удаляющий его после выбора верного варианта
         self.words.remove(self.word)
         self.wrong_translations.remove(self.word)
 
@@ -586,20 +557,10 @@ class RepeatWords(QMainWindow):
 
     def show_result(self, result, style):
         self.MessageWindow.display(
-            message=result,
-            style=style
-        )
-        # Для экономи ресурсов (запрос синонимов) вывод примеров и связных слов
-        # осуществляется только нажатием на 'Hint'
-
-        # else:
-        #     synonyms = self.word.get_synonyms(synonyms_only=True)
-        #     self.AlertWindow.display(
-        #         word=self.word,
-        #         result=result,
-        #         content=examples,
-        #         style=style
-        #     )
+            message=result, style=style)
+        # Для экономи ресурсов (запрос синонимов)
+        # вывод примеров и связных слов осуществляется
+        # только нажатием на 'Hint'
 
     def are_you_right(self):
         if self.are_you_right(self.sender().text()):
@@ -630,8 +591,8 @@ class RepeatWords(QMainWindow):
         except:
             synonyms = []
 
-        if self.word.examples or synonyms:
-            examples = self.word.examples
+        examples = self.examples.find(self.word.word)
+        if examples or synonyms:
             synonyms = [f"<b>Synonyms/linked words</b>: {', '.join(synonyms)}"] * bool(synonyms)
 
             self.AlertWindow.display(
@@ -657,21 +618,21 @@ class RepeatWords(QMainWindow):
         self.MessageWindow.close()
         self.ShowWindow.close()
         super().close()
-
+    
     def log(self, item, w_choice):
         """ Логгирование в файл ошибочных вариантов в json:
-            {id_слова: {id ошибочного варианта: количество ошибок}}
+            {ID_слова: {ID ошибочного варианта: количество ошибок}}
         """
-        assert file_exist(self.log_filename, 'json'), "Wrong log file, func – RepeatWords.log"
+        assert file_exist(REPEAT_LOG_PATH), "Wrong log file, func – RepeatWords.log"
         assert isinstance(item, str) or isinstance(item, Word), f"Wrong word: '{item}', func – RepeatWords.log"
         assert isinstance(w_choice, str) and w_choice, f"Wrong w_choice: '{w_choice}', func – RepeatWords.log"
 
         repeating_word_id = item.get_id() if isinstance(item, Word) else word_id(item)
 
-        # Найти id слова по выбранному варианту:
+        # Найти ID слова по выбранному варианту:
         wrong_choice_id = search_by_attribute(self.wrong_translations, w_choice).get_id()
 
-        data = load_json_dict(self.log_filename)
+        data = load_json_dict(REPEAT_LOG_PATH)
 
         if repeating_word_id in data:
             if wrong_choice_id in data[repeating_word_id]:
@@ -681,7 +642,13 @@ class RepeatWords(QMainWindow):
         else:
             data[repeating_word_id] = {wrong_choice_id: 1}
 
-        dump_json_dict(data=data, filename=self.log_filename)
+        dump_json_dict(data=data, filename=REPEAT_LOG_PATH)
+
+
+def backup_repeating_log():
+    """ Backup лога повторений """
+    print("\nRepeating log backuping...")
+    backup(file_name(REPEAT_LOG_PATH), REPEAT_LOG_PATH)
 
 
 class Alert(QWidget):
@@ -697,13 +664,8 @@ class Alert(QWidget):
         self.ResultLabel.setText('')
         self.ExamplesBrowser.setText('')
 
-    def display(
-            self,
-            word,
-            result,
-            content,
-            style=''
-    ):
+    def display(self, word, result,
+                content, style=''):
         assert isinstance(word, Word), f"Wrong word: '{word}', func – Alert.display"
         assert isinstance(result, str), f"Wrong result: '{result}', func – Alert.display"
         assert len(content) > 0, "Empty example, choose the Message window instead, func – Alert.display"
@@ -747,11 +709,7 @@ class Show(QWidget):
         super().__init__()
         UIC.loadUi(SHOW_WINDOW_PATH, self)
 
-    def display(
-            self,
-            items,
-            window_title='Show'
-    ):
+    def display(self, items, window_title='Show'):
         assert isinstance(items, list) and len(items), f"Wrong items: '{items}', func – Show.display"
         assert isinstance(window_title, str), f"Wrong window_title: '{window_title}', func – Show.display"
 
@@ -806,22 +764,14 @@ class Properties:
 
 
 class Word:
-    def __init__(
-            self,
-            word='',
-            transcription='',
-            properties='',
-            learned_def=[],
-            russian_def=[],
-            example=[]
-    ):
+    def __init__(self, word='', transcription='',
+                 properties='', learned_def=[], russian_def=[]):
         """
         :param word: learned word to learn
         :param properties: POS, language level, formal, ancient,
         if verb (transitivity, ) if noun (countable, )
         :param learned_def: learned definitions of the word: list
         :param russian_def: russian definitions of the word (maybe don't exist): list
-        :param example: examples of the word using
         """
         assert isinstance(word, str), f"Wrong word: '{type(word)}', '{word}', func – Word.__init__"
         assert isinstance(transcription, str), f"Wrong transcription: '{transcription}', func – Word.__init__"
@@ -831,8 +781,6 @@ class Word:
             f"Wrong learned_def: '{type(learned_def)}', '{learned_def}', func – Word.__init__"
         assert isinstance(russian_def, list) or isinstance(russian_def, str), \
             f"Wrong russian_def: '{type(russian_def)}', '{russian_def}', func – Word.__init__"
-        assert isinstance(example, list) or isinstance(example, str), \
-            f"Wrong example: {type(example)}, '{example}', func – Word.__init__"
 
         if ' – ' in word:
             self.__init__(*parse_str(word))
@@ -857,11 +805,6 @@ class Word:
             elif isinstance(properties, str):
                 self.properties = Properties(properties)
 
-            if isinstance(example, str):
-                self.examples = list(filter(len, map(str.strip, example.split(';'))))
-            elif isinstance(example, list):
-                self.examples = list(filter(len, map(str.strip, example)))
-
     def get_russian(self, def_only=False):
         """
         Вовзращает русские определения
@@ -879,15 +822,6 @@ class Word:
         if def_only:
             return '; '.join(self.learned)
         return f"{self.word} – {'; '.join(self.learned)}".capitalize()
-
-    def get_examples(self, examples_only=False):
-        """
-        Возвращает примеры
-        :param examples_only: True – только примеры, False – термин и примеры
-        """
-        if examples_only:
-            return '; '.join(self.examples)
-        return f"{self.word.capitalize()} – {'; '.join(self.examples)}"
 
     def get_synonyms(self, synonyms_only=False):
         """
@@ -947,7 +881,6 @@ class Word:
             other.properties + self.properties,
             other.learned[:] + self.learned[:],
             other.russian[:] + self.russian[:],
-            other.examples[:] + self.examples[:]
         )
 
     def __eq__(self, other):
@@ -1051,8 +984,7 @@ class Word:
             hash(self.transcription) +
             hash(self.properties) +
             hash(tuple(self.russian)) +
-            hash(tuple(self.learned)) +
-            hash(tuple(self.examples))
+            hash(tuple(self.learned))
         )
 
 
@@ -1062,7 +994,8 @@ class WordsPerDay:
         :param content: list or iterator объектов класса Word
         :param date: дата изучения
         """
-        assert isinstance(date, str) or isinstance(date), f"Wrong date: {date}, func – WordsPerDay.__init__"
+        assert isinstance(date, str) or isinstance(date, DATE), \
+            f"Wrong date: {date}, func – WordsPerDay.__init__"
 
         self.date = str_to_date(date)
         self.content = list(sorted(content))
@@ -1089,20 +1022,8 @@ class WordsPerDay:
             []
         )
 
-    def examples_only(self, examples_only=False):
-        res = reduce(
-            lambda res, elem: res + [elem.get_examples(examples_only)], 
-            self.content, 
-            []
-        )
-        
-        return list(filter(len, res))
-
-    def get_words_list(
-            self,
-            with_learned=False,
-            with_rus=False
-    ):
+    def get_words_list(self, with_learned=False,
+                       with_rus=False):
         """
         :param with_learned: return words with learned its definitions or not
         :param with_rus: return words with its Russian definitions or not
@@ -1124,15 +1045,9 @@ class WordsPerDay:
     def get_content(self):
         return self.content[:]
 
-    def get_examples(self, examples_only=False):
-        return reduce(
-            lambda res, elem: res + [elem.get_examples(examples_only=examples_only)],
-            self.content,
-            []
-        )
-
     def get_date(self, dateformat=DATEFORMAT):
-        dateformat = DATEFORMAT if dateformat is True else None
+        # TODO: исправить вызовы
+        dateformat = DATEFORMAT if dateformat is True or isinstance(dateformat, str) else None
         return self.date if dateformat is None else self.date.strftime(dateformat)
 
     def get_info(self):
@@ -1230,14 +1145,11 @@ class WordsPerDay:
 
 
 class Vocabulary:
-    def __init__(
-            self,
-            filename=DATA,
-            list_of_days=None
-    ):
+    def __init__(self, f_name=DATA_PATH,
+                 list_of_days=None):
         if list_of_days is None or len(list_of_days) == 0:
-            assert file_exist(filename), f"Wrong file: {filename}, func – Vocabulary.__init__"
-            self.list_of_days = init_vocabulary_from_file(filename)[:]
+            assert file_exist(f_name), f"Wrong file: {f_name}, func – Vocabulary.__init__"
+            self.list_of_days = init_vocabulary_from_file(f_name)[:]
         else:
             assert isinstance(list_of_days, list) and len(list_of_days) and isinstance(list_of_days[0], WordsPerDay), \
                 f"Wrong list_of_days: '{list_of_days}', func – Vocabulary.__init__"
@@ -1315,14 +1227,6 @@ class Vocabulary:
             []
         )))
 
-    def examples(self, examples_only=False):
-        """ Вернуть все существующие примеры из слов, включая или не включая сами слова """
-        return reduce(
-            lambda result, element: result + element.examples_only(examples_only=examples_only),
-            self.list_of_days,
-            []
-        )
-
     def duration(self):
         """ Вернуть продолжительность ведения словаря """
         return (self.end() - self.begin()).days + 1
@@ -1333,6 +1237,7 @@ class Vocabulary:
         """
         if file_exist(self.graphic_name):
             return
+        sheet_name = 'Graphic'
 
         workbook = Workbook(self.graphic_name)
         workbook.set_properties({
@@ -1347,7 +1252,7 @@ class Vocabulary:
             'align': "vcenter"
         })
 
-        worksheet = workbook.add_worksheet(SHEET_NAME)
+        worksheet = workbook.add_worksheet(sheet_name)
 
         date_count = self.get_pairs_date_count()
 
@@ -1378,8 +1283,8 @@ class Vocabulary:
         })
 
         chart.add_series({
-            'values': f"={SHEET_NAME}!B1:B{row}",
-            'categories': f"={SHEET_NAME}!A1:A{row}",
+            'values': f"={sheet_name}!B1:B{row}",
+            'categories': f"={sheet_name}!A1:A{row}",
             'line': {
                 'color': "orange"
             },
@@ -1520,7 +1425,7 @@ class Vocabulary:
         if len(repeating_days) > 1 and repeating_days[0].get_date() != repeating_days[-1].get_date():
             window_title = f"{repeating_days[0].get_date()}-{repeating_days[-1].get_date()}, {len(repeating_days)} days"
         else:
-            window_title = repeating_days[0].get_date()
+            window_title = repeating_days[0].get_date(DATEFORMAT)
 
         # Переданные айтемы могут содержать одинаковые слова
         repeating_days = sum(list(map(WordsPerDay.get_content, repeating_days)), [])
@@ -1539,10 +1444,6 @@ class Vocabulary:
 
         exit(app.exec_())
 
-    def remember_via_example(self, word):
-        """ Вернуть примеры с заданным словом (str или Word) """
-        return self(word, by_example=True)
-
     def begin(self, by_str=False):
         """ Вернуть дату первого дня строкой или DATE-объектом """
         return self.list_of_days[0].get_date(by_str)
@@ -1557,11 +1458,11 @@ class Vocabulary:
         return list(filter(lambda x: x.is_fit(*properties), self.common_words_list()))
 
     def search_by_id(self, *id):
-        """ Вернуть список слов, чьи id равны id переданным """
+        """ Вернуть список слов, чьи ID равны ID переданным """
         # TODO: доработать, добавить возможность передавать list: f([i1, i2...])
         # TODO: исправить проверку
         assert (isinstance(id, list) or isinstance(id, tuple)) and id and all(isinstance(i, str) and len(i) == ID_LENGTH for i in id), \
-            f"Wrong id: '{id}'"
+            f"Wrong ID: '{id}'"
 
         return list(filter(lambda x: x.id in id, self.common_words_list()))
 
@@ -1578,10 +1479,13 @@ class Vocabulary:
         )
 
     def backup(self):
-        backup('content', DATA)
+        """ Backup главного словаря """
+        # добавить в имя файла промежуток дат
+        f_name = add_to_file_name(file_name(DATA_PATH),
+                                  self.get_date_range())
 
-    def restore(self):
-        restore('content', 'user_data\\content_restore')
+        print("Main data backuping...")
+        backup(f_name, DATA_PATH)
 
     def __contains__(self, item):
         """ Есть ли слово (str или Word) или WordsPerDay с такой датой (только DATE) в словаре """
@@ -1654,6 +1558,7 @@ class Vocabulary:
         if 'by_def' in kwargs and kwargs['by_def']:
             word = f" – {word}"
 
+        # TODO:
         if 'by_example' in kwargs and kwargs['by_example']:
             res = reduce(
                 lambda res, elem: res + [up_word(elem.get_examples(examples_only=True), word)],
@@ -1675,7 +1580,7 @@ class Vocabulary:
                f"\n{DIVIDER}\n\n".join(map(str, self.list_of_days))
 
     def __bool__(self):
-        return bool(len(self.list_of_days))
+        return bool(self.list_of_days)
 
     def __iter__(self):
         return iter(self.list_of_days)
@@ -1686,43 +1591,25 @@ class Vocabulary:
 
 if __name__ == "__main__":
     try:
-        # init_from_xlsx('2_25_2020.xlsx', 'content')
-        dictionary = Vocabulary()
-        # dictionary.repeat('7.12.2019', mode=1)
+        # init_from_xlsx('1_16_2020.xlsx')
+        # dictionary = Vocabulary()
+        # s_examples = SelfExamples()
+        c_examples = CorpusExamples()
+        # c_examples.load_examples()
+        print(c_examples.find('reject', 1))
+        # value = Examples()
 
-        # dictionary.backup()
+        # date_range = dictionary.get_date_range()
+        # ex_name = f"examples_{len(value)}"
+        # dictionary.repeat('most_difficult', mode=1)
+        # backup_user_data(date_range, ex_name)
+        # restore_user_data(date_range, ex_name)
+        # restore_repeating_log()
         pass
     except Exception as trouble:
         print(trouble)
 
+
 # TODO: избегать флаги как параметры функции
-# TODO: траблы с hint там, где есть собствтенные примеры
-# TODO: информация об образовательных успехах за месяц (в SQL db это будет проще и быстрее)
-# TODO: изменение размера окна, подгонять под это размер содержимого
-# TODO: вернуть транскрипцию в запоминание;
-# TODO: предупреждении об отсутствии какого-либо элемента: слова, одного из определений etc
-# TODO: проверка на наличие изученного слова в db в init_from_xlsx, ведь id должен быть уникален
-# TODO: напоминание по картинкам из Google
-
-# TODO: добавить повторение в два этапа: mode=1, mode=2; повторение вводом с клавиатуры;
-
-# TODO: добавить возможность листать список слов в повторении
+# TODO: траблы с hint там, где есть собственные примеры
 # TODO: сделать все функции выполняющими только одну поставленную задачу
-
-# TODO: создать SQL базу данных
-#  id – дата изучения (DEFAULT - TODAY) – слово – транскрипция – свойства – английское определение – русское определение
-
-# TODO: создать SQL базу данных примеров (или json-файл с ними):
-#  id слов оригинального текста, за исключением артиклей, предлогов и прочего, – оригинальный текст – перевод
-
-# TODO: парсер html – добавить возможность получать примеры употребления слов
-#  из параллельного подкоруса в составе НКРЯ, BNC или COCA
-
-# TODO: автономная работа RepeatWords класса: можно передавать некоторый список Word-объектов для
-#  повторения извне, а можно работать с умолчательной db:
-#  1. окно с галочками для выбора дней для повторения;
-#  2. окно с вводом свойств слов для повторения
-
-# TODO: кодировка для транскрипции в кнопках
-# TODO: написать тесты
-# TODO: backup на Google Drive
