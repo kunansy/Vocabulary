@@ -18,6 +18,14 @@ def test_str_to_date_4():
     assert str_to_date('12_1_1970_1488') == DATE(1970, 1, 12)
 
 
+def test_str_to_date_5():
+    assert str_to_date('12_1_1970/1488') == DATE(1970, 1, 12)
+
+
+def test_str_to_date_6():
+    assert str_to_date('12_1_19701488') == DATE(1970, 1, 12)
+
+
 def test_str_to_date_swap_1():
     assert str_to_date('1.12.1970', True) == DATE(1970, 1, 12)
 
