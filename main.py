@@ -1589,27 +1589,6 @@ class Vocabulary:
         return hash(sum(hash(i) for i in self.list_of_days))
 
 
-if __name__ == "__main__":
-    try:
-        # init_from_xlsx('1_16_2020.xlsx')
-        # dictionary = Vocabulary()
-        # s_examples = SelfExamples()
-        c_examples = CorpusExamples()
-        # c_examples.load_examples()
-        print(c_examples.find('reject', 1))
-        # value = Examples()
-
-        # date_range = dictionary.get_date_range()
-        # ex_name = f"examples_{len(value)}"
-        # dictionary.repeat('most_difficult', mode=1)
-        # backup_user_data(date_range, ex_name)
-        # restore_user_data(date_range, ex_name)
-        # restore_repeating_log()
-        pass
-    except Exception as trouble:
-        print(trouble)
-
-
 # TODO: избегать флаги как параметры функции
 # TODO: траблы с hint там, где есть собственные примеры
 # TODO: сделать все функции выполняющими только одну поставленную задачу
