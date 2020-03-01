@@ -7,13 +7,13 @@ from xlrd import open_workbook
 from backup_setup import backup
 from constants import SELF_EXAMPLES_PATH, CORPUS_EXAMPLES_URL, \
     CORPUS_EXAMPLES_PATH, CORPUS_XLSX_PATH, ORIGINAL_TEXT_END
-from common_funcs import file_exist, add_to_file_name, file_name
-from random import shuffle
+from common_funcs import file_exist, add_to_file_name, \
+    file_name, is_russian, is_english, file_ext
 
 
 class Examples:
-    def __init__(self, f_path):
-        """ Отсортированный список примеров """
+    def __init__(self, f_path: str):
+        """ Инициализация списка примеров по пути """
         assert file_exist(f_path), \
             f"File does not exist: '{f_path}', func – Examples.__init__"
 
@@ -22,32 +22,26 @@ class Examples:
 
     def load_examples(self):
         """ Загрузить отсортированные примеры из файла """
-        examples = open(self.path, 'r', encoding='utf-8').readlines()
-        return list(sorted(map(str.strip, examples)))
+        if not file_exist(self.path):
+            print(f"'{self.path}' not found. func – Examples.load_examples")
+            return []
 
-    def find(self, item, count=None):
-        """ Вернуть n примеров слова списком """
+        examples = open(self.path, 'r', encoding='utf-8').readlines()
+        return list(sorted(map(str.strip, examples)))[:]
+
+    def find(self, item: str):
+        """ Вернуть примеры слова списком """
         assert isinstance(item, str) and item, \
             f"Wrong item: '{item}', str expected, func – Examples.find"
 
         item = item.lower().strip()
-        examples = self.examples[:]
-        shuffle(examples)
-
-        res = list(filter(lambda x: item in x.lower(), examples))
-        if not res:
-            raise ValueError(f"Example to '{item}' not found")
-        if count is not None and len(res) < count:
-            raise ValueError(f"There are only {len(res)} examples, not {count}")
-
-        return res[:count]
+        return list(filter(lambda x: item in x.lower(), self.examples))[:]
 
     def backup(self):
         """ Backup примеров """
         f_name = add_to_file_name(file_name(self.path),
                                   f"_{len(self.examples)}")
 
-        print("\nExamples backuping...")
         backup(f_name, self.path)
 
     def __bool__(self):
@@ -58,7 +52,7 @@ class Examples:
             f"Wrong item: '{item}', int or slice expected, func – Examples.__getitem__"
         return self.examples[item]
 
-    def __contains__(self, item):
+    def __contains__(self, item: str):
         """ Есть ли пример такого слова """
         assert isinstance(item, str) and item, \
             f"Wrong item: '{item}', str expected, func – Examples.__contains__"
@@ -67,11 +61,11 @@ class Examples:
         return any(item in i.lower() for i in self.examples)
 
     def __len__(self):
-        """ Общее количество примеров """
+        """ Количество примеров """
         return len(self.examples)
 
     def __str__(self):
-        """ Вернуть пронумерованные примеры """
+        """ Пронумерованные примеры """
         return '\n'.join(f"{num}. {item}" for num, item in enumerate(self.examples, 1))
 
     def __iter__(self):
@@ -85,43 +79,77 @@ class SelfExamples(Examples):
     def __init__(self):
         super().__init__(SELF_EXAMPLES_PATH)
 
+    def backup(self):
+        print("Self examples backupping...")
+        super().backup()
+
 
 class CorpusExamples(Examples):
     def __init__(self):
+        """ Инициализация списка примеров по пути;
+            список из (оригинал, перевод);
+            путь, где храняться xlsx-файлы с запросами из НКРЯ
+        """
         super().__init__(CORPUS_EXAMPLES_PATH)
+        self.xlsx_path = CORPUS_XLSX_PATH + "\\{name}.xlsx"
 
-    def find(self, item, count=None):
-        res = super().find(item, count)
-        # если примеров достаточно
-        if len(res) <= count:
-            return list(map(lambda x: tuple(x.split(ORIGINAL_TEXT_END)), res))
+    def load_examples(self):
+        """ Разделено на (оригинал, перевод) """
+        base = super().load_examples()
+        return list(map(lambda x: tuple(x.split(ORIGINAL_TEXT_END)), base))[:]
 
-        # если недостаточно – сделать ещё запрос
-        # непосредственно для этого слова
-        self.new_examples(item)
-        res = super().find(item, count)
-        return list(map(lambda x: x.split(ORIGINAL_TEXT_END), res))
+    def find(self, item):
+        """ Поиск в оригинале и переводе """
+        assert isinstance(item, str) and item, \
+            f"Wrong item: '{item}', str expected, func – CorpusExamples.find"
+
+        item = item.lower().strip()
+        # если есть русский символ, то соответствие может
+        # быть только в переводе
+        if is_russian(item):
+            where = lambda x: x[1].lower()
+        else:
+            where = lambda x: x[0].lower()
+
+        res = list(filter(lambda x: item in where(x), self.examples))
+        if res:
+            return list(filter(lambda x: item in where(x), self.examples))[:]
+        else:
+            # если примера нет – сделать ещё запрос
+            # непосредственно для этого слова
+            try:
+                self.new_examples(item)
+            except Exception as trouble:
+                print(trouble, "\nfunc – CorpusExamples.find", "\nTerminating")
+                return []
+
+            self.examples = self.load_examples()
+            return list(filter(lambda x: item in where(x), self.examples))
 
     def new_examples(self, item):
-        """ Получить новые примеры из НКРЯ и выгрузить их в txt """
+        """ Получить примеры из НКРЯ и выгрузить их в txt """
         assert isinstance(item, str) and item, \
             f"Wrong item: '{item}', str expected, func – CorpusExamples.new_examples"
 
         self.download_corpus_examples(item)
-        self.convert_xlsx(f"{CORPUS_XLSX_PATH}\\{item}.xlsx")
-
-        self.examples = self.load_examples()
+        self.convert_xlsx(self.xlsx_path.format(name=item))
 
     def download_corpus_examples(self, item):
         """ Скачать примеры из параллельного подкорпуса НКРЯ в xlsx """
         assert isinstance(item, str) and item, \
             f"Wrong word: '{item}', str expected, func – CorpusExamples.get_example"
 
-        f_path = f"{CORPUS_XLSX_PATH}\\{item}.xlsx"
+        f_path = self.xlsx_path.format(name=item)
+
+        # если примеры такого слова уже есть,
+        # то не надо качать их заново
         assert not access(f_path, F_OK), \
             f"File: '{f_path}' still exist, func – CorpusExamples.get_example"
 
         response = get(CORPUS_EXAMPLES_URL.format(word=item), stream=True)
+
+        # бывает, что запрос возвращается с 500 ошибкой
+        assert response.ok, f"Пример к '{item}' в корпусе не найден, {response}"
 
         with open(f_path, "wb") as handle:
             for data in tqdm(response.iter_content()):
@@ -132,21 +160,63 @@ class CorpusExamples(Examples):
         assert isinstance(f_path, str), \
             f"Wrong f_path: '{f_path}', str expected, func – CorpusExamples.convert_xlsx"
         assert access(f_path, F_OK), \
-            f"File: '{f_path}' does not exist, func – CorpusExamplesconvert_xlsx."
+            f"File: '{f_path}' does not exist, func – CorpusExamples.convert_xlsx"
+        assert file_ext(f_path) == 'xlsx', \
+            f"Wrong file type: '{file_ext(f_path)}', xlsx expected, func – CorpusExamples.convert_xlsx"
 
-        rb = open_workbook(f_path)
+        try:
+            rb = open_workbook(f_path)
+        except Exception as trouble:
+            print(trouble)
+            print(f"Невозможно открыть файл: '{f_path}'")
+            print("func – CorpusExamples.convert_xlsx")
+            return
+
         sheet = rb.sheet_by_index(0)
 
         index = lambda item: item.index('[')
-        with open(CORPUS_EXAMPLES_PATH, 'a', encoding='utf-8') as f:
+        with open(self.path, 'a', encoding='utf-8') as f:
             for i in range(sheet.nrows)[1:]:
                 item = sheet.row_values(i)
+                # бывает, что запрос был по русскому слову
+                # в таком случае оригинал и перевод меняются местами
+                if is_russian(item[-1]):
+                    original, native = item[-2].strip(), item[-1].strip()
+                    original = original[:index(original)].replace("' ", "'")
+                elif is_russian(item[-2]):
+                    native, original = item[-2].strip(), item[-1].strip()
+                    original = original[:index(original)].replace("' ", "'")
+                else:
+                    raise ValueError("Something went wrong, func – CorpusExamples.convert_xlsx")
 
-                original, native = item[-2].strip(), item[-1].strip()
-                original = original[:index(original)].replace("' ", "'")
+                assert is_russian(native) and is_english(original), \
+                    "Original must be in Eng, native – in Rus, func – CorpusExamples.convert_xlsx"
 
                 f.write(f"{original}{ORIGINAL_TEXT_END}{native}\n")
 
+    def backup(self):
+        print("Corpus examples backupping...")
+        super().backup()
+
+    def __contains__(self, item):
+        """ Есть ли пример в базе,
+            Если в item есть русский символ, то поиск в переводах,
+            а иначе в оригинальных предложениях
+        """
+        assert isinstance(item, str) and item, \
+            f"Wrong item: '{item}', str expected, func – CorpusExamples.__contains__"
+
+        item = item.lower().strip()
+        if is_russian(item):
+            # если есть русский символ, то соответствие
+            # может быть только в переводе
+            where = lambda x: x[1].lower()
+        else:
+            where = lambda x: x[0].lower()
+
+        return any(item in where(i) for i in self.examples)
+
     def __str__(self):
-        res = map(lambda x: x.replace(ORIGINAL_TEXT_END, ' Перевод: '), self.examples)
+        """ Оригинал и перевод через ' Перевод: ' """
+        res = map(lambda x: f"{x[0]}. Перевод: {x[1]}", self.examples)
         return '\n'.join(f"{num}. {item}" for num, item in enumerate(res))
