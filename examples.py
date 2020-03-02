@@ -5,10 +5,10 @@ from xlrd import open_workbook
 
 
 from backup_setup import backup
-from constants import SELF_EXAMPLES_PATH, CORPUS_EXAMPLES_URL, \
-    CORPUS_EXAMPLES_PATH, CORPUS_XLSX_PATH, ORIGINAL_TEXT_END
-from common_funcs import file_exist, add_to_file_name, \
-    file_name, is_russian, is_english, file_ext
+from constants import (SELF_EXAMPLES_PATH, CORPUS_EXAMPLES_URL,
+                       CORPUS_EXAMPLES_PATH, CORPUS_XLSX_PATH, ORIGINAL_TEXT_END)
+from common_funcs import (file_exist, add_to_file_name, file_name,
+                          is_russian, is_english, file_ext)
 
 
 class Examples:
@@ -36,6 +36,13 @@ class Examples:
 
         item = item.lower().strip()
         return list(filter(lambda x: item in x.lower(), self.examples))[:]
+
+    def count(self, item: str):
+        """ Количество примеров слова """
+        assert isinstance(item, str) and item, \
+            f"Wrong item: '{item}', str expected, func – Examples.count"
+
+        return len(self.find(item))
 
     def backup(self):
         """ Backup примеров """
@@ -99,17 +106,16 @@ class CorpusExamples(Examples):
         return list(map(lambda x: tuple(x.split(ORIGINAL_TEXT_END)), base))[:]
 
     def find(self, item):
-        """ Поиск в оригинале и переводе """
+        """ Поиск в оригинале и переводе, если примеров нет
+            в базе – запросить ещё
+        """
         assert isinstance(item, str) and item, \
             f"Wrong item: '{item}', str expected, func – CorpusExamples.find"
 
         item = item.lower().strip()
         # если есть русский символ, то соответствие может
         # быть только в переводе
-        if is_russian(item):
-            where = lambda x: x[1].lower()
-        else:
-            where = lambda x: x[0].lower()
+        where = self.where(item)
 
         res = list(filter(lambda x: item in where(x), self.examples))
         if res:
@@ -117,25 +123,33 @@ class CorpusExamples(Examples):
         else:
             # если примера нет – сделать ещё запрос
             # непосредственно для этого слова
-            try:
-                self.new_examples(item)
-            except Exception as trouble:
-                print(trouble, "\nfunc – CorpusExamples.find", "\nTerminating")
-                return []
+            self.new_examples(item)
 
-            self.examples = self.load_examples()
             return list(filter(lambda x: item in where(x), self.examples))
 
-    def new_examples(self, item):
-        """ Получить примеры из НКРЯ и выгрузить их в txt """
+    def new_examples(self, item: str):
+        """ Получить примеры и выгрузить их в txt,
+            пополнив self.examples
+        """
         assert isinstance(item, str) and item, \
             f"Wrong item: '{item}', str expected, func – CorpusExamples.new_examples"
 
-        self.download_corpus_examples(item)
-        self.convert_xlsx(self.xlsx_path.format(name=item))
+        try:
+            self.download_corpus_examples(item)
+        except Exception as trouble:
+            print(trouble)
+            return
 
-    def download_corpus_examples(self, item):
-        """ Скачать примеры из параллельного подкорпуса НКРЯ в xlsx """
+        try:
+            self.convert_xlsx(self.xlsx_path.format(name=item))
+        except Exception as trouble:
+            print(trouble)
+        else:
+            self.examples = self.load_examples()[:]
+            print(f"Примеры употребления слова: '{item}' успешно получены")
+
+    def download_corpus_examples(self, item: str):
+        """ Скачать примеры в xlsx """
         assert isinstance(item, str) and item, \
             f"Wrong word: '{item}', str expected, func – CorpusExamples.get_example"
 
@@ -155,8 +169,8 @@ class CorpusExamples(Examples):
             for data in tqdm(response.iter_content()):
                 handle.write(data)
 
-    def convert_xlsx(self, f_path):
-        """ Преобразовать скачанные примеры в txt-файл """
+    def convert_xlsx(self, f_path: str):
+        """ Преобразовать xlsx-примеры в txt """
         assert isinstance(f_path, str), \
             f"Wrong f_path: '{f_path}', str expected, func – CorpusExamples.convert_xlsx"
         assert access(f_path, F_OK), \
@@ -164,20 +178,14 @@ class CorpusExamples(Examples):
         assert file_ext(f_path) == 'xlsx', \
             f"Wrong file type: '{file_ext(f_path)}', xlsx expected, func – CorpusExamples.convert_xlsx"
 
-        try:
-            rb = open_workbook(f_path)
-        except Exception as trouble:
-            print(trouble)
-            print(f"Невозможно открыть файл: '{f_path}'")
-            print("func – CorpusExamples.convert_xlsx")
-            return
-
+        rb = open_workbook(f_path)
         sheet = rb.sheet_by_index(0)
 
         index = lambda item: item.index('[')
         with open(self.path, 'a', encoding='utf-8') as f:
             for i in range(sheet.nrows)[1:]:
                 item = sheet.row_values(i)
+
                 # бывает, что запрос был по русскому слову
                 # в таком случае оригинал и перевод меняются местами
                 if is_russian(item[-1]):
@@ -189,16 +197,52 @@ class CorpusExamples(Examples):
                 else:
                     raise ValueError("Something went wrong, func – CorpusExamples.convert_xlsx")
 
-                assert is_russian(native) and is_english(original), \
-                    "Original must be in Eng, native – in Rus, func – CorpusExamples.convert_xlsx"
+                if is_russian(native) and is_english(original):
+                    f.write(f"{original}{ORIGINAL_TEXT_END}{native}\n")
+                else:
+                    print("Original must be in Eng, native – in Rus, func – CorpusExamples.convert_xlsx")
 
-                f.write(f"{original}{ORIGINAL_TEXT_END}{native}\n")
+    def where(self, item: str):
+        """ Определить, где искать: если is_rus(item) – в
+            переводе, иначе – в оригинале
+        """
+        assert isinstance(item, str) and item, \
+            f"Wrong item: '{item}', str expected, func – CorpusExamples.where"
+
+        if is_russian(item.lower()):
+            return lambda x: x[1]
+        elif is_english(item.lower()):
+            return lambda x: x[0]
+        else:
+            raise ValueError(f"Wrong item: '{item}', undefinable language")
+
+    def count(self, item: str):
+        """ Количество примеров слова """
+        assert isinstance(item, str) and item, \
+            f"Wrong item: '{item}', str expected, func – CorpusExamples.count"
+
+        item = item.lower().strip()
+        where = self.where(item)
+
+        res = list(filter(lambda x: item in where(x), self.examples))
+        return len(res)
 
     def backup(self):
         print("Corpus examples backupping...")
         super().backup()
 
-    def __contains__(self, item):
+    def __call__(self, item: str):
+        """ Найти пример слова в базе. Если примера
+            нет  – не запршивать новый
+        """
+        assert isinstance(item, str) and item, \
+            f"Wrong item: '{item}', str expected, func – CorpusExamples.__call__"
+
+        where = self.where(item)
+        item = item.lower().strip()
+        return list(filter(lambda x: item in where(x), self.examples))
+
+    def __contains__(self, item: str):
         """ Есть ли пример в базе,
             Если в item есть русский символ, то поиск в переводах,
             а иначе в оригинальных предложениях
@@ -207,12 +251,10 @@ class CorpusExamples(Examples):
             f"Wrong item: '{item}', str expected, func – CorpusExamples.__contains__"
 
         item = item.lower().strip()
-        if is_russian(item):
-            # если есть русский символ, то соответствие
-            # может быть только в переводе
-            where = lambda x: x[1].lower()
-        else:
-            where = lambda x: x[0].lower()
+
+        # если есть русский символ, то соответствие
+        # может быть только в переводе
+        where = self.where(item)
 
         return any(item in where(i) for i in self.examples)
 
