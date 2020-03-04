@@ -1,10 +1,11 @@
+import re
 from requests import get
 from datetime import date
 from os import access, F_OK
 from json import loads, dump
 from collections import Counter
 
-from constants import RUS_ALPHABET, REPEAT_LOG_PATH
+from constants import REPEAT_LOG_PATH
 from constants import SYNONYMS_SEARCH_URL, SYNONYMS_SEARCH_MODEL
 
 
@@ -62,11 +63,12 @@ def add_to_file_name(f_path: str, add: str):
 
 def language(item: str):
     """ Есть русский символ в строке – rus, иначе – eng """
-    # TODO: ускорить за счёт re
     assert isinstance(item, str) and item, \
         f"Wrong item: '{item}', func – language"
 
-    if any(i in RUS_ALPHABET for i in item.lower()):
+    pattern = re.compile(r'[а-яА-ЯёЁ]')
+
+    if pattern.findall(item):
         return 'rus'
     return 'eng'
 
@@ -126,7 +128,7 @@ def dump_json_dict(data, filename):
 
 
 def diff_words_id():
-    """ Вернёт список уникальных ID самых в труднозапоминаемых
+    """ Получить список уникальных ID самых в труднозапоминаемых
         (порядке убывания) слов из лога запоминаний;
         'значимость' – сумма количества ошибочных вариантов
         и количества выбора этих вариантов
@@ -137,18 +139,20 @@ def diff_words_id():
     if not log_dict:
         return []
 
-    # сортировка по убыванию знаимости
+    # сортировка по убыванию значимости
     most_error_count = dict(sorted(log_dict.items(),
                                    key=lambda t: len(t[1]) + sum(t[1].values()),
                                    reverse=True))
 
     # преобразование в пары: ID слова – его значимость
-    id_to_worth = {key: len(val) + sum(val.values()) for key, val in most_error_count.items()}
+    id_to_worth = {key: len(val) + sum(val.values())
+                   for key, val in most_error_count.items()}
 
     # пары: ID – количество слов, для которых данное является
     # ошибочным вариантом (при кол-ве выборов > 1)
     # TODO: переработать
-    mistaken_variants = sum([[j for j in filter(lambda x: log_dict[i][x] != 1, log_dict[i])] for i in most_error_count],
+    mistaken_variants = sum([[j for j in filter(lambda x: log_dict[i][x] != 1, log_dict[i])]
+                             for i in most_error_count],
                             [])
 
     for key, val in Counter(mistaken_variants).items():
@@ -158,7 +162,8 @@ def diff_words_id():
             id_to_worth[key] = val
 
     # сортировка слов по значимости после её изменения
-    id_to_worth = dict(sorted(id_to_worth.items(), key=lambda x: x[1], reverse=True))
+    id_to_worth = dict(sorted(id_to_worth.items(),
+                              key=lambda x: x[1], reverse=True))
 
     return list(id_to_worth.keys())[:]
 
@@ -178,7 +183,6 @@ def get_synonyms(item):
     try:
         items = list(list(response.json()[SYNONYMS_SEARCH_MODEL].values())[0].keys())
     except:
-        print(f"Something went wrong, func – get_synonyms")
         return []
 
     linked_words = list(map(lambda x: ''.join(filter(str.isalpha, x.split('_')[0])), items))

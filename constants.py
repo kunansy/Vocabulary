@@ -1,5 +1,3 @@
-RUS_ALPHABET = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
-
 # пути к пользовательским данным
 DATA_PATH = 'user_data\\vocabulary.txt'
 REPEAT_LOG_PATH = 'user_data\\repeat_log.json'
