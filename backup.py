@@ -2,14 +2,14 @@ from __future__ import print_function
 
 import io
 import pickle
-import os.path
 
 from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
 from apiclient.http import MediaFileUpload, MediaIoBaseDownload
 
-from constants import SCOPES, TOKEN_PATH, CREDS_PATH, BACKUP_FOLDER_ID
+from common_funcs import file_exist
+from constants import SCOPES, TOKEN_PATH, CREDS_PATH, mimeTypes
 
 
 class Auth:
@@ -33,7 +33,8 @@ class Auth:
 
     def creds(self):
         """ Считать права доступа """
-        assert file_exist(TOKEN_PATH), f"Wrong token: '{TOKEN_PATH}'"
+        assert file_exist(TOKEN_PATH), \
+            f"Wrong token: '{TOKEN_PATH}'"
 
         with open(TOKEN_PATH, 'rb') as file:
             return pickle.load(file)
@@ -51,16 +52,17 @@ class Auth:
 
         self.dump(creds)
 
-    def list_items(self, size=10):
-        """ Вернуть список имён и ID первых n айтемов """
+    def list_items(self, size):
+        """ Вернуть список имён и ID айтемов на диске """
         results = self.drive_service.files().list(
             pageSize=size, fields="nextPageToken, files(id, name)").execute()
         return results.get('files', [])
 
     def upload_file(self, file_name, file_path,
-                    mimetype='text/', folder_id=BACKUP_FOLDER_ID):
-        """ Залить файл на Google Drive в папку backup """
-        assert file_exist(file_path), f"Wrong file: '{file_name}', func – Auth.upload_file"
+                    mimetype, folder_id):
+        """ Залить файл на Google Drive в указанную папку  """
+        assert file_exist(file_path), \
+            f"Wrong file: '{file_name}', func – Auth.upload_file"
 
         file_metadata = {
             'name': file_name,
@@ -95,26 +97,38 @@ class Auth:
             fh.seek(10)
             file.write(fh.read())
 
-    def search_item(self, item_name):
-        """ Найти айтем по имени """
+    def search(self, item_name, key="name = '{item}'"):
+        """ Найти айтем по имени, принимает ключ
+            поиска формата "атрибут оператор '{item}'"
+        """
         results = self.drive_service.files().list(
-             fields="nextPageToken, files(id, name)", q=f"name = '{item_name}'").execute()
+            fields="nextPageToken, files(id, name, mimeType)",
+            q=key.format(item=item_name)).execute()
         # fields(kind, mimetype)
         return results.get('files', [])
 
     def del_item(self, item_id):
         """ Удалить айтем по ID """
-        self.drive_service.files().delete(fileId=item_id).execute()
+        self.drive_service.files().delete(
+            fileId=item_id).execute()
+
+    def create_folder(self, name):
+        """ Создать папку с переданным именем,
+            вернув её ID
+        """
+        folder_metadata = {
+            'name': name,
+            'mimeType': mimeTypes['folder']
+        }
+        folder = self.drive_service.files().create(
+            body=folder_metadata, fields='id').execute()
+        return folder.get('id')
 
 
 def print_items(items):
     """ Распечатать айтемы, имя и ID """
     if items:
-        print('\n'.join(u'{0} ({1})'.format(item['name'], item['id']) for item in items))
+        name_id = map(lambda x: f"{x['name']} {x['id']}", items )
+        print('\n'.join(name_id))
     else:
         print('No files found')
-
-
-def file_exist(f_name):
-    """ Существует ли файл """
-    return os.path.exists(f_name)
