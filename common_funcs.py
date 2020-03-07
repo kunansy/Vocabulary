@@ -5,27 +5,18 @@ from os import access, F_OK
 from json import loads, dump
 from collections import Counter
 
-from constants import REPEAT_LOG_PATH
+from constants import REPEAT_LOG_PATH, PREPOSTIONS
 from constants import SYNONYMS_SEARCH_URL, SYNONYMS_SEARCH_MODEL
 
 
 def file_exist(f_path, ext=''):
-    """ Существует ли файл с переданным именем и расширением """
-    assert isinstance(f_path, str) and f_path, \
-        f"Wrong f_path: '{f_path}', str expected, func – file_exist"
-    assert isinstance(ext, str), \
-        f"Wrong extention: '{ext}', str expected, func – file_exist"
-
-    return access(add_ext(f_path, ext), F_OK)
+    """ Есть ли доступ к файлу с переданным именем и расширением """
+    f_path = add_ext(f_path, ext)
+    return access(f_path, F_OK)
 
 
 def add_ext(f_name, ext=''):
     """ Добавить к имени файла расширение, если его нет """
-    assert isinstance(f_name, str) and f_name, \
-        f"Wrong f_name: '{f_name}', str expected, func – add_ext"
-    assert isinstance(ext, str), \
-        f"Wrong extention: '{ext}', str expected, func – add_ext"
-
     if f_name.endswith(f".{ext}"):
         return f_name
     return f"{f_name}.{ext}"
@@ -33,17 +24,14 @@ def add_ext(f_name, ext=''):
 
 def file_name(f_path: str):
     """ Вернуть имя файла из его пути """
-    assert isinstance(f_path, str) and f_path, \
-        f"Wrong f_path: '{f_path}', str expected, func – get_file_name"
-
-    return f_path.split('\\')[-1]
+    if '\\' in f_path:
+        return f_path.split('\\')[-1]
+    elif '/' in f_path:
+        return f_path.split('/')[-1]
 
 
 def file_ext(f_path: str):
     """ Вернуть расширение файла """
-    assert isinstance(f_path, str), \
-        f"Wrong f_path: '{f_path}', str expected, func – file_ext"
-
     if '.' not in f_path:
         return ''
     return f_path.split('.')[-1]
@@ -51,9 +39,6 @@ def file_ext(f_path: str):
 
 def add_to_file_name(f_path: str, add: str):
     """ Добавить что-то в конец имени файла до расширения """
-    assert isinstance(f_path, str) and f_path, \
-        f"Wrong f_path: '{f_path}', str expected, func – add_to_file_name"
-
     if '.' not in f_path:
         return f"{f_path}{add}"
 
@@ -63,12 +48,7 @@ def add_to_file_name(f_path: str, add: str):
 
 def language(item: str):
     """ Есть русский символ в строке – rus, иначе – eng """
-    assert isinstance(item, str) and item, \
-        f"Wrong item: '{item}', func – language"
-
-    pattern = re.compile(r'[а-яА-ЯёЁ]')
-
-    if pattern.findall(item):
+    if re.findall(r'[а-яё]', item, re.IGNORECASE):
         return 'rus'
     return 'eng'
 
@@ -91,13 +71,13 @@ def str_to_date(string, swap=False):
     assert isinstance(string, str), \
         f"Wrong date: '{string}', str expected, func – str_to_date"
 
-    # разделителный символ находится автоматически
-    # как самый частый не числовой и не буквенный
-    # символ в строке
+    # разделителный символ как самый частый не
+    # числовой и не буквенный символ в строке
     split_symbol = max(list(filter(lambda x: not x.isalnum(), string)),
                        key=lambda x: string.count(x))
 
-    filtered_string = ''.join(filter(lambda x: x.isdigit() or x in split_symbol, string))
+    filtered_string = ''.join(filter(lambda x: x.isdigit() or x in split_symbol,
+                                     string))
 
     # убрать возможный мусор из строки
     day, month, year, *trash = filtered_string.split(split_symbol)
@@ -139,13 +119,15 @@ def diff_words_id():
     if not log_dict:
         return []
 
+    # подсчёт значимости
+    worth = lambda x: len(x) + sum(x.values())
     # сортировка по убыванию значимости
     most_error_count = dict(sorted(log_dict.items(),
-                                   key=lambda t: len(t[1]) + sum(t[1].values()),
+                                   key=lambda t: worth(t[1]),
                                    reverse=True))
 
     # преобразование в пары: ID слова – его значимость
-    id_to_worth = {key: len(val) + sum(val.values())
+    id_to_worth = {key: worth(val)
                    for key, val in most_error_count.items()}
 
     # пары: ID – количество слов, для которых данное является
@@ -163,7 +145,8 @@ def diff_words_id():
 
     # сортировка слов по значимости после её изменения
     id_to_worth = dict(sorted(id_to_worth.items(),
-                              key=lambda x: x[1], reverse=True))
+                              key=lambda x: x[1],
+                              reverse=True))
 
     return list(id_to_worth.keys())[:]
 
@@ -171,19 +154,108 @@ def diff_words_id():
 def get_synonyms(item):
     """ Получить список связнных слов/синонимов к заданному """
     # TODO: сортировка по близости слов
-    assert isinstance(item, str), \
+    assert isinstance(item, str) and item, \
         f"Wrong item: '{item}', str expected, func – get_synonyms"
 
-    word = item.lower().strip()
-    response = get(SYNONYMS_SEARCH_URL.format(word=word, model=SYNONYMS_SEARCH_MODEL))
+    url = SYNONYMS_SEARCH_URL.format(word=item.lower().strip(),
+                                     model=SYNONYMS_SEARCH_MODEL)
+    response = get(url)
 
     assert response.ok, \
-        f"Something went wrong, word: '{word}', func – get_synonyms {response}"
+        f"{response}, func – get_synonyms"
 
     try:
-        items = list(list(response.json()[SYNONYMS_SEARCH_MODEL].values())[0].keys())
+        res_json = response.json()
+        items = list(res_json[SYNONYMS_SEARCH_MODEL].values())
+        items = list(items[0].keys())
     except:
         return []
-
+    # TODO: style
     linked_words = list(map(lambda x: ''.join(filter(str.isalpha, x.split('_')[0])), items))
     return list(set(linked_words))
+
+
+def just_word(item: str):
+    """ Вернуть слово без предлогов и прочего """
+    assert isinstance(item, str) and item, \
+        f"Wrong item: '{item}', str expected, func – just_word"
+
+    trash = ['sb','sth', 'not', 'no', 'do', 'doing', 'be', 'to',
+             'the', 'a', 'an', 'one', 'etc', 'that', 'those',
+             'these', 'this', 'or', 'and', 'can', 'may', 'might',
+             'could', 'should', 'must', 'would', 'your', 'my']
+
+    item = item.lower().replace("'", ' ').strip()
+    if ' ' not in item and '/' not in item:
+        return item
+    if ' ' not in item and '/' in item:
+        return item.split('/')[0]
+
+    item = item.split()
+    item = filter(lambda x: len(x) > 1, item)
+    del_trash = list(filter(lambda x: x not in trash, item))
+    del_preps = list(filter(lambda x: x not in PREPOSTIONS, del_trash))
+
+    if not del_preps:
+        return clean_up(del_trash[0])
+    else:
+        item = del_preps
+
+    item = list(filter(lambda x: len(x) > 1, item))
+    # могут быть записаны три формы глагола через /
+    if len(item) == 1 and '/' in item[0]:
+        return clean_up(item[0].split('/')[0])
+    if all('/' in i for i in item):
+        return clean_up(item[0].split('/')[0])
+
+    return clean_up(list(filter(lambda x: '/' not in x, item))[0])
+
+
+def clean_up(item: str):
+    """ Remove unalpha symbols except for '-' """
+    assert isinstance(item, str) and item, \
+        f"Wrong item: '{item}', str expected, func – clean_up"
+    return ''.join(filter(lambda x: x.isalpha() or x in '-', item))
+
+
+def change_words(string: str, word: str, changing):
+    """ Изменить в строке все похожие слова (те, в которых есть
+        item как составная часть), применив к ним changing (callable obj)
+    """
+    assert isinstance(string, str) and string, \
+        f"Wrong string: '{string}', str expected, func – change_words"
+    assert isinstance(word, str) and word, \
+        f"Wrong word: '{word}', str expected, func – change_words"
+    assert callable(changing), \
+        f"Wrong changing model, callable object expected, func – change_words"
+
+    pattern = re.compile(f'\w{word}\w', re.IGNORECASE)
+    words = pattern.finditer(string)
+
+    if not words or len(string) < len(word):
+        return string
+
+    # TODO: обойтись как-то без медленного for/ускорить его
+    for i in words:
+        begin, end = i.start(), i.end()
+        # TODO: replace нельзя: string='thin... thing', item='in',
+        #  в words есть thin – replace меняет все thin → thing = THINg;
+        #  можно ли как-то иначе?
+        string = string[:begin] + changing(string[begin:end]) + string[end:]
+    return string
+
+
+def trouble(item, problem, expected=''):
+    """ Принимает функцию, из которой вызывается,
+        возникшую проблему и что ожидалось (тип файла);
+
+        Возращает проблему, что ожидалось (если передано), имя файла,
+        класса (если передан метод класса) и функции, где произошла ошибка
+    """
+    class_name = ''
+    if 'method' in item.__class__.__name__:
+        # если передан объект класса, то показать имя класса
+        class_name = f"{item.__self__.__class__.__name__}."
+    func_name = item.__name__
+    expected = f"{expected} expected," * bool(expected)
+    return f"{problem}, {expected} {file_name(__file__)}.{class_name}{func_name}"
