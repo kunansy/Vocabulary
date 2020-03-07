@@ -1,6 +1,6 @@
 from tqdm import tqdm
+from time import sleep
 from requests import get
-from os import access, F_OK
 from xlrd import open_workbook
 
 
@@ -21,21 +21,21 @@ class Examples:
         self.examples = self.load_examples()
 
     def load_examples(self):
-        """ Загрузить отсортированные примеры из файла """
+        """ Загрузить примеры из файла """
         if not file_exist(self.path):
             print(f"'{self.path}' not found. func – Examples.load_examples")
             return []
 
         examples = open(self.path, 'r', encoding='utf-8').readlines()
-        return list(sorted(map(str.strip, examples)))[:]
+        return list(map(str.strip, examples))[:]
 
     def find(self, item: str):
         """ Вернуть примеры слова списком """
         assert isinstance(item, str) and item, \
             f"Wrong item: '{item}', str expected, func – Examples.find"
 
-        item = item.lower().strip()
-        return list(filter(lambda x: item in x.lower(), self.examples))[:]
+        return list(filter(lambda x: item in x.lower(),
+                           self.examples))[:]
 
     def count(self, item: str):
         """ Количество примеров слова """
@@ -48,7 +48,7 @@ class Examples:
         """ Backup примеров """
         f_name = add_to_file_name(file_name(self.path),
                                   f"_{len(self.examples)}")
-
+        print(f"{self.__class__.__name__} backupping...")
         backup(f_name, self.path)
 
     def __bool__(self):
@@ -57,6 +57,10 @@ class Examples:
     def __getitem__(self, item):
         assert isinstance(item, int) or isinstance(item, slice), \
             f"Wrong item: '{item}', int or slice expected, func – Examples.__getitem__"
+        if isinstance(item, slice):
+            res = self.__class__()
+            res.examples = self.examples[item][:]
+            return res
         return self.examples[item]
 
     def __contains__(self, item: str):
@@ -73,24 +77,21 @@ class Examples:
 
     def __str__(self):
         """ Пронумерованные примеры """
-        return '\n'.join(f"{num}. {item}" for num, item in enumerate(self.examples, 1))
+        res = list(map(lambda x: f"{x[0]}. {x[1]}",
+                       enumerate(self.examples, 1)))
+        return '\n'.join(res)
 
     def __iter__(self):
         return iter(self.examples)
-
-    def __hash__(self):
-        return hash(tuple(self.examples))
 
 
 class SelfExamples(Examples):
     def __init__(self):
         super().__init__(SELF_EXAMPLES_PATH)
 
-    def backup(self):
-        print("Self examples backupping...")
-        super().backup()
 
-
+# TODO: если переводить поиск к re, то вместо
+#  readlines ипользовать read?
 class CorpusExamples(Examples):
     def __init__(self):
         """ Инициализация списка примеров по пути;
@@ -113,8 +114,6 @@ class CorpusExamples(Examples):
             f"Wrong item: '{item}', str expected, func – CorpusExamples.find"
 
         item = item.lower().strip()
-        # если есть русский символ, то соответствие может
-        # быть только в переводе
         where = self.where(item)
 
         res = list(filter(lambda x: item in where(x), self.examples))
@@ -135,18 +134,22 @@ class CorpusExamples(Examples):
             f"Wrong item: '{item}', str expected, func – CorpusExamples.new_examples"
 
         try:
+            print(f"Examples to '{item}' have requested...")
             self.download_corpus_examples(item)
         except Exception as trouble:
-            print(trouble)
+            print(trouble, f"Requesting examples to '{item}'",
+                  "Terminating...", sep='\n')
             return
 
         try:
-            self.convert_xlsx(self.xlsx_path.format(name=item))
+            path = self.xlsx_path.format(name=item)
+            new_examples = self.convert_xlsx(path)[:]
         except Exception as trouble:
-            print(trouble)
+            print(trouble, f"Converting examples to '{item}'", "Terminating...", sep='\n')
         else:
-            self.examples = self.load_examples()[:]
-            print(f"Примеры употребления слова: '{item}' успешно получены")
+            # пополнить текущую базу примеров
+            self.examples += new_examples[:]
+            print(f"Examples to: '{item}' successfully obtained")
 
     def download_corpus_examples(self, item: str):
         """ Скачать примеры в xlsx """
@@ -154,53 +157,67 @@ class CorpusExamples(Examples):
             f"Wrong word: '{item}', str expected, func – CorpusExamples.get_example"
 
         f_path = self.xlsx_path.format(name=item)
-
         # если примеры такого слова уже есть,
         # то не надо качать их заново
-        assert not access(f_path, F_OK), \
+        assert not file_exist(f_path), \
             f"File: '{f_path}' still exist, func – CorpusExamples.get_example"
 
-        response = get(CORPUS_EXAMPLES_URL.format(word=item), stream=True)
+        url = CORPUS_EXAMPLES_URL.format(word=item)
+        response = get(url, stream=True)
+        while response.status_code == 429:
+            print("Запросов к корпусу слишком много, стоит немного подождать...")
+            sleep(5)
+            response = get(url, stream=True)
 
         # бывает, что запрос возвращается с 500 ошибкой
-        assert response.ok, f"Пример к '{item}' в корпусе не найден, {response}"
+        assert response.ok, \
+            f"Examples to '{item}' not found, {response}"
 
         with open(f_path, "wb") as handle:
             for data in tqdm(response.iter_content()):
                 handle.write(data)
 
     def convert_xlsx(self, f_path: str):
-        """ Преобразовать xlsx-примеры в txt """
-        assert isinstance(f_path, str), \
-            f"Wrong f_path: '{f_path}', str expected, func – CorpusExamples.convert_xlsx"
-        assert access(f_path, F_OK), \
+        """ Преобразовать xlsx-примеры в txt,
+            вернуть список новых примеров
+        """
+        assert file_exist(f_path), \
             f"File: '{f_path}' does not exist, func – CorpusExamples.convert_xlsx"
         assert file_ext(f_path) == 'xlsx', \
             f"Wrong file type: '{file_ext(f_path)}', xlsx expected, func – CorpusExamples.convert_xlsx"
 
         rb = open_workbook(f_path)
         sheet = rb.sheet_by_index(0)
+        new_examples = []
 
-        index = lambda item: item.index('[')
+        index = lambda x: x.index('[')
         with open(self.path, 'a', encoding='utf-8') as f:
             for i in range(sheet.nrows)[1:]:
+                # TODO: циклы ускорять через numba?
                 item = sheet.row_values(i)
-
                 # бывает, что запрос был по русскому слову
                 # в таком случае оригинал и перевод меняются местами
                 if is_russian(item[-1]):
                     original, native = item[-2].strip(), item[-1].strip()
-                    original = original[:index(original)].replace("' ", "'")
                 elif is_russian(item[-2]):
                     native, original = item[-2].strip(), item[-1].strip()
-                    original = original[:index(original)].replace("' ", "'")
                 else:
-                    raise ValueError("Something went wrong, func – CorpusExamples.convert_xlsx")
+                    raise ValueError("One of items: must be in Russian, "
+                                     "func – CorpusExamples.convert_xlsx")
+                # если источник указан — убрать его
+                if '[' in original:
+                    original = original[:index(original)]
+                else:
+                    print("Source is not mentioned, func – CorpusExamples.convert_xlsx")
 
+                original = original.replace("' ", "'")
                 if is_russian(native) and is_english(original):
                     f.write(f"{original}{ORIGINAL_TEXT_END}{native}\n")
+                    new_examples.append((original, native))
                 else:
-                    print("Original must be in Eng, native – in Rus, func – CorpusExamples.convert_xlsx")
+                    print("Original must be in Eng, native – in Rus, "
+                          "func – CorpusExamples.convert_xlsx")
+        return new_examples[:]
 
     def where(self, item: str):
         """ Определить, где искать: если is_rus(item) – в
@@ -214,22 +231,14 @@ class CorpusExamples(Examples):
         elif is_english(item.lower()):
             return lambda x: x[0]
         else:
-            raise ValueError(f"Wrong item: '{item}', undefinable language")
+            raise ValueError(f"Wrong item: '{item}', undefinable language, "
+                             f"func – CorpusExamples.where")
 
     def count(self, item: str):
         """ Количество примеров слова """
         assert isinstance(item, str) and item, \
             f"Wrong item: '{item}', str expected, func – CorpusExamples.count"
-
-        item = item.lower().strip()
-        where = self.where(item)
-
-        res = list(filter(lambda x: item in where(x), self.examples))
-        return len(res)
-
-    def backup(self):
-        print("Corpus examples backupping...")
-        super().backup()
+        return len(self(item))
 
     def __call__(self, item: str):
         """ Найти пример слова в базе. Если примера
@@ -243,22 +252,13 @@ class CorpusExamples(Examples):
         return list(filter(lambda x: item in where(x), self.examples))
 
     def __contains__(self, item: str):
-        """ Есть ли пример в базе,
-            Если в item есть русский символ, то поиск в переводах,
-            а иначе в оригинальных предложениях
-        """
+        """ Есть ли пример в базе """
         assert isinstance(item, str) and item, \
             f"Wrong item: '{item}', str expected, func – CorpusExamples.__contains__"
-
-        item = item.lower().strip()
-
-        # если есть русский символ, то соответствие
-        # может быть только в переводе
-        where = self.where(item)
-
-        return any(item in where(i) for i in self.examples)
+        return bool(self(item))
 
     def __str__(self):
-        """ Оригинал и перевод через ' Перевод: ' """
-        res = map(lambda x: f"{x[0]}. Перевод: {x[1]}", self.examples)
-        return '\n'.join(f"{num}. {item}" for num, item in enumerate(res))
+        """ Оригинал и перевод через ' Перевод: ', пронумерованно """
+        res = map(lambda x: f"{x[0]}. {x[1][0]} Перевод: {x[1][1]}",
+                  enumerate(self.examples, 1))
+        return '\n'.join(res)
