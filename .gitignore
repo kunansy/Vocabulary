@@ -9,6 +9,5 @@
 .pytest_cache/
 .idea/
 __pycache__/
-user_data/
-program_data/
+data/
 Next_features/
