@@ -11,3 +11,5 @@
 __pycache__/
 data/
 Next_features/
+tests/pkl_content
+tests/test_self_ex.txt
