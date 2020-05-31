@@ -1,9 +1,7 @@
 import pytest
 from datetime import date as DATE
-# from src.main.main import (
-# )
 from src.main.common_funcs import (
-    up_word, str_to_date
+    up_word, str_to_date, get_synonyms
 )
 
 
@@ -114,5 +112,36 @@ def test_up_word_12():
     assert up_word('can', 'can') == 'CAN'
 
 
-if __name__ == "__main__":
-    pytest.main()
+def test_get_synonyms_assert():
+    with pytest.raises(AssertionError):
+        get_synonyms('get the')
+
+
+def test_get_synonyms_assert2():
+    with pytest.raises(AssertionError):
+        get_synonyms(111)
+
+
+def test_get_synonyms_assert3():
+    with pytest.raises(AssertionError):
+        get_synonyms('')
+
+
+def test_get_synonyms_assert4():
+    with pytest.raises(AssertionError):
+        get_synonyms('   ')
+
+
+def test_get_synonyms_normal():
+    res = ['find sth/sb', 'getting sth/sb', 'obtain sth/sb', 'crawled sth/sb',
+           'try sth/sb', 'receive sth/sb', 'tell sth/sb', 'scare sth/sb',
+           'otherwise PROPN', 'steal sth/sb']
+    assert get_synonyms('get') == res
+
+
+def test_get_synonyms_normal_with_spaces():
+    res = ['find sth/sb', 'getting sth/sb', 'obtain sth/sb', 'crawled sth/sb',
+           'try sth/sb', 'receive sth/sb', 'tell sth/sb', 'scare sth/sb',
+           'otherwise PROPN', 'steal sth/sb']
+    assert get_synonyms(' get ') == res
+
