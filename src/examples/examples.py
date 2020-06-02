@@ -6,13 +6,14 @@ __all__ = (
 
 import asyncio
 import random as rand
+from time import time
 from typing import (
     List, Dict, Callable, Tuple, Any
 )
 
 import aiohttp
+import bs4
 from aiohttp import ClientSession
-from bs4 import BeautifulSoup
 
 from src.backup.backup_setup import backup
 from src.main.common_funcs import (
@@ -23,7 +24,6 @@ from src.main.constants import (
     SELF_EX_PATH, CORPUS_URL
 )
 from src.trouble.trouble import Trouble
-
 
 SPH = 100_000
 
@@ -37,7 +37,7 @@ async def fetch(_url: str,
         second, print a message and try again
 
     :param _url: URL to get its html code;
-    URL must start with http(s)://
+     URL must start with http(s)://
     :param _ses: asyncio.ClientSession
     :param kwargs: kwargs to aiohttp.ClientSession.get()
     :return: html code, decoding to str(UTF-8)
@@ -61,7 +61,7 @@ async def bound_fetch(_sem: asyncio.Semaphore,
 
     :param _sem: asyncio.Semaphore
     :param _url: URL to get its html code;
-    URL must start with http(s)://
+     URL must start with http(s)://
     :param _session: asyncio.ClientSession
     :param kwargs: kwargs to aiohttp.ClientSession.get()
     :return: str, html code of the page
@@ -77,9 +77,9 @@ async def get_htmls_coro(_url: str,
         Creating and transmitting Semaphore to the next coro
 
     :param _url: str, URL to get its html codes;
-    URL must start with http(s)://
+     URL must start with http(s)://
     :param p_count: int, count of pages and 'p' key
-    for corpus requesting
+     for corpus requesting
     :param kwargs: kwargs to aiohttp.ClientSession.get()
     :return: list of str, html codes of the pages
     """
@@ -104,25 +104,29 @@ def get_htmls(_url: str,
     """ Coro running, get html code of the pages
 
     :param _url: str, URL to get its html code;
-    URLs must start with http(s)://
-    :param p_count: int, count of pages and key 'p'
-    for corpus requesting
+     URLs must start with http(s)://
+    :param p_count: int, count of pages and http key 'p'
+     for corpus requesting
     :param kwargs: kwargs to aiohttp.ClientSession.get()
     :return: list of str, html codes of the pages
-    :exception Trouble: if wrong type given or
-    p_count <= 0
+    :exception Trouble: if wrong type given, p_count <= 0
+     or URL does not start with 'http(s)://'
     """
     trbl = Trouble(get_htmls)
     if not (isinstance(_url, str) and _url):
         raise trbl(f"Wrong ULR {_url}", "right str")
     if not (isinstance(p_count, int) and p_count > 0):
         raise trbl(p_count, _p='w_int')
+    if not (_url.startswith('http://') or _url.startswith('https://')):
+        raise trbl(f"Wrong url: {_url}", "starts with http(s)://")
 
     try:
+        # TODO: wrong async exception catching
         res = asyncio.run(get_htmls_coro(_url, p_count, **kwargs))
-    except aiohttp.client.InvalidURL as err:
-        print(f"Invalid url: {err}",
-              "Wrong urls or params given",
+    except aiohttp.client.InvalidURL:
+        print("Error: Invalid url",
+              "Wrong url or params given",
+              f"{_url}, {kwargs}",
               "Func – get_htmls", sep='\n')
     else:
         return res
@@ -292,10 +296,10 @@ class SelfExamples(Examples):
         """ Find all examples of the word
 
         :param _word: str, word to find its examples,
-        lowered and stripped
+         lowered and stripped
         :return: list of str, all examples (_word in this sentence)
         :exception Trouble: if wrong type given,
-        _word is empty or ' ' in _word
+         _word is empty or ' ' in _word
         """
         if not (isinstance(_word, str) and _word and ' ' not in _word):
             raise Trouble(self.find, _word, _p='w_str')
@@ -312,10 +316,10 @@ class SelfExamples(Examples):
             len of the list from find()
 
         :param _word: str, word to find the count
-        of its examples, lowered and stripped
+         of its examples, lowered and stripped
         :return: int, count of the examples
         :exception Trouble: if wrong type given,
-        _word is empty or ' ' in _word
+         _word is empty or ' ' in _word
         """
         return len(self.find(_word))
 
@@ -338,10 +342,10 @@ class SelfExamples(Examples):
             The same as find(_word)
 
         :param _word: str, word to find its examples,
-        lowered and stripped
+         lowered and stripped
         :return: list of str, all examples (_word in this sentence)
         :exception Trouble: if wrong type given,
-        _word is empty or ' ' in _word
+         _word is empty or ' ' in _word
         """
         return self.find(_word)
 
@@ -351,7 +355,7 @@ class SelfExamples(Examples):
             bool() to results of the find(_word)
 
         :param _word: word to find its example,
-        lowered and stripped
+         lowered and stripped
         :return: bool, Is there an example in the base?
         """
         return bool(self.find(_word))
@@ -432,32 +436,50 @@ class SelfExamples(Examples):
 
 class CorpusExamples(Examples):
     """ Base class of corpus examples """
-    __slots__ = '_url', '_item', '_count', '_examples', '_params'
+    __slots__ = '_item', '_count', '_examples', '_params'
     # max distance between neighboring words
     MAX_DIST = 2
     # documents per page
     DOC_PER_PAGE = 5
     # examples per document
     SENTENCES_PER_DOC = 1
+    # sort show order
+    DEFAULT_SORT = 'i_grcreated'
+    # sort show order keys
+    SORT_KEYS = {
+        'i_grtagging': "by default (what it means?)",
+        'random': "randomly",
+        'i_grauthor': "by author",
+        'i_grcreated_inv': "by creation date",
+        'i_grcreated': "by creation date in reversed order",
+        'i_grbirthday_inv': "by author's birth date",
+        'i_grbirthday': "by author's birth date in reversed order"
+    }
 
     def __init__(self,
-                 _word: str,
-                 _count: int) -> None:
-        """ Contains url of the corpus, word,
-            count and examples, obtained from the corpus;
+                 _item: str,
+                 _count: int,
+                 **kwargs) -> None:
+        """ Contains word, count and examples, obtained from the corpus;
 
-            Count be in range (0; 45);
-            If there is space in _word, then request
-            happens with all words, max distance between
-            them is MAX_DIST constant
+        Count must be in range (0; 45]; If there is space in _word,
+        then request happens with all words, max distance between
+        them is MAX_DIST constant.
 
-        :param _word: word to find, str
+        One should give words in its vocabulary forms.
+
+        If keywords values are wrong, use the default ones.
+
+        :param _item: word(s) to find its (their) examples, str
         :param _count: int, in range (0; 45]
+        :keyword sort: sort show order, default –
+         by creation date in reversed order, str in sort keys dict
+        :keyword spd: sentences per document, int in [1; 10]
         :return: None
-        :exception Trouble: if wrong type given,
-        count beyond the range
+        :exception Trouble: if wrong type given or
+         count beyond the range
         """
-        super().__init__(_word)
+        super().__init__(_item)
         _trbl = Trouble(self.__init__)
         if not (isinstance(_count, int)):
             raise _trbl(_count, _p='w_int')
@@ -465,62 +487,66 @@ class CorpusExamples(Examples):
             raise _trbl(f"Wrong examples count: '{_count}'",
                         "in (0; 45)")
 
-        self._item = fmt_str(_word).split()
+        self._item = fmt_str(_item).split()
         self._examples = []
         self._count = _count
-        self._url = CORPUS_URL
+
+        # given values or default ones
+        spd = kwargs.get('spd', None) or self.SENTENCES_PER_DOC
+        sort = kwargs.get('sort', None) or self.DEFAULT_SORT
+
+        if not (isinstance(sort, str) and sort in self.SORT_KEYS):
+            sort = self.DEFAULT_SORT
+        if not (isinstance(spd, int) and 0 < spd <= 10):
+            spd = self.SENTENCES_PER_DOC
+
         self._params = {
             'text': 'lexgramm',
             'out': 'normal',
-            'sort': 'i_grcreated',
             'env': 'alpha',
             'dpp': self.DOC_PER_PAGE,
-            'spd': self.SENTENCES_PER_DOC
+            'sort': sort,
+            'spd': spd
         }
+        # add words to _params and distance between them
+        self._words_to_params()
 
     def _new_examples(self) -> None:
-        """ Get examples, put them to the list, write a
-            message if sth went wrong (catch an exception);
+        """ Request count examples of the words and parse
+        pages' html codes, put examples to the list, write a
+        message if sth went wrong (catch an exception);
 
-            Usually it obtained more examples than expected,
-            to list gets only fist _count by using slice
+        Usually it obtained more examples than expected, to list
+        gets only first _count by using slice, len(examples) <= _count;
+
+        There are 5 docs at the page → requesting count // 5 pages,
+        but <= 9, otherwise the corpus returns 429 error
         :return: None
         """
-        try:
-            _examples = self._request_parse_examples()
-        except Exception as err:
-            print(err,
-                  f"Requesting examples to '{' '.join(self._item)}'",
-                  "Terminating...",
-                  sep='\n')
+        if self._count >= self._params['dpp']:
+            p_count = self._count // self._params['dpp']
         else:
-            self._examples = _examples[:][:self._count]
-
-    def _request_parse_examples(self) -> List[Dict]:
-        """ Request count examples of the word
-            and parse html code of the pages
-
-            There are 5 docs at the page → requesting count // 5 pages,
-            but <= 9, otherwise the corpus returns 429 error
-        :return: list of dicts, parsed pages
-        """
-        # TODO: if there are a little count of examples in the corpus,
-        #  or if count examples obtained from < count // 5 pages,
-        #  further requests get a lot of time; How to fix?
-
-        p_count = self._count // 5 if self._count >= 5 else 1
-        self._extend_params()
-
+            p_count = 1
         # html code of the pages
-        htmls = get_htmls(self._url, p_count, **self._params)
-        # TODO: async html code parsing, how to?
-        #  1. unsync, https://youtu.be/F19R_M4Nay4 – slower than sync
-        #  2. loop.run_in_executor() – parsers must be segregated from classes and
-        #  executing time is not better a lot (gt. asyncreq.py)
-        return self._parse_all(htmls)
+        coro_executing_start = time()
+        htmls = get_htmls(CORPUS_URL, p_count, **self._params)
+        print(f"Coro executing time: {time() - coro_executing_start:.2f}")
+
+        try:
+            parsing_start = time()
+            res = self._parse_all(htmls)
+            parsing_stop = time()
+        except Exception as err:
+            print("Error: ", err,
+                  f"Requesting examples to '{' '.join(self._item)}'",
+                  f"func – {self._parse_all.__name__}", sep='\n')
+        else:
+            print(f"Parsing time: {parsing_stop - parsing_start:.2f}")
+            print(f"Overall time: {parsing_stop - coro_executing_start:.2f}")
+            self._examples = res[:][:self._count]
 
     def _parse_doc(self,
-                   _text: str) -> List[Dict]:
+                   _doc: bs4.element.ResultSet) -> List[Dict[str, str]]:
         """ Parse the doc to list of dicts {
                 lang or another key: text,
                 source: text source
@@ -544,19 +570,20 @@ class CorpusExamples(Examples):
         if not (isinstance(_html, str) and _html):
             raise Trouble(self._parse_page, _html, _p='w_str')
 
-        soup = BeautifulSoup(_html, 'lxml')
-        ul = soup.findAll('ul')
+        soup = bs4.BeautifulSoup(_html, 'lxml')
         res = []
-        for tag in ul:
+        for doc in soup.findAll('ul'):
+            li = doc.findAll('li')
             try:
-                parsed_text = self._parse_doc(tag.text)
-            except ValueError:
-                # substring not found
-                pass
+                parsed_doc = self._parse_doc(li)
+            except AssertionError as err:
+                print(err)
             except Exception as err:
-                print("Error:", err, f"{self._parse_page.__name__}")
+                print("Error:", err,
+                      f"Func – {self._parse_doc.__name__}",
+                      sep='\n')
             else:
-                res += parsed_text
+                res += parsed_doc
         return res
 
     def _parse_all(self,
@@ -574,45 +601,21 @@ class CorpusExamples(Examples):
 
         return sum([(self._parse_page(page)) for page in htmls], [])
 
-    def _txt_src(self,
-                 text: str) -> Tuple[str, str]:
-        """ Parse the string to txt and source,
-            removing '[омин...' part
+    def _find_searched_words(self,
+                             tag: bs4.element.Tag) -> List[str]:
+        # TODO
+        # searched words are marked
+        searched_words = tag.findAll('span', {'class': "b-wrd-expl g-em"})
+        return [i.text for i in searched_words]
 
-        :param text: str
-        :return: tuple of text and its source
-        :exception Trouble: if wrong type given
-        """
-        if not (isinstance(text, str) and text):
-            raise Trouble(self._txt_src, text, _p='w_str')
+    def _mark_searched_words(self,
+                             _str: str,
+                             searched_words: List[str],
+                             marker: Callable) -> str:
+        # TODO
+        pass
 
-        brace = text.index('[')
-        txt, src = text[:brace], text[brace:text.index('[омон')].strip()
-        # remove braces symbols
-        if src.startswith('['):
-            src = src[1:]
-        if src.endswith(']'):
-            src = src[:-1]
-        return txt, src
-
-    def _clean_str(self,
-                   text: str) -> str:
-        """ Remove double spaces, and everything but
-            '-–.,:;―!? from the string
-
-        :param text: str
-        :return: cleaned str
-        :exception Trouble: if wrong type given
-        """
-        if not (isinstance(text, str) and text):
-            raise Trouble(self._clean_str, text, _p='w_str')
-
-        text = filter(lambda x: x.isalpha() or x in " '-–.,:;―!?", text)
-        text = ''.join(text)
-        text = text.replace('\\', '').split()
-        return ' '.join(text)
-
-    def _extend_params(self) -> None:
+    def _words_to_params(self) -> None:
         """ Add words and distance between them to
             params dict
 
@@ -637,8 +640,7 @@ class CorpusExamples(Examples):
         :return: None
         :exception Trouble: if wrong type given
         """
-        # TODO: fix
-        self += other
+        self.__iadd__(other)
 
     def __str__(self) -> str:
         """ Enumerated with '1' examples,
@@ -663,12 +665,12 @@ class CorpusExamples(Examples):
             SOURCE: some text
 
         :return: str with enumerated examples or
-        "Examples to: 'word' not found" if resulting list is empty
+         "Examples to: 'word' not found" if resulting list is empty
         """
         if not self._examples:
             return f"Examples to '{' '.join(self._item)}' not found"
 
-        _res = []
+        _res = ["Примеры получены из Национального корпуса русского языка\n"]
         for num, exmpl in enumerate(self._examples, 1):
             j = f'{num}.\n'
             for key, val in exmpl.items():
@@ -703,59 +705,64 @@ class CorpusExamples(Examples):
 
 class RussianCorpusExamples(CorpusExamples):
     """ Class to work with general (russian) subcorpus of NCRL """
-    __slots__ = '_url', '_item', '_count', '_examples'
+    __slots__ = '_item', '_count', '_examples', '_params'
 
     def __init__(self,
-                 _word: str,
-                 _count: int) -> None:
+                 _item: str,
+                 _count: int,
+                 **kwargs) -> None:
         """ Parent init and getting examples;
 
-        :param _word: str, word to find its examples
+        :param _item: str, word to find its examples
         :param _count: int, count of examples
         :return: None:
         :exception Trouble: if wrong type given,
-        count beyond the range
+         count beyond the range
         """
-        super().__init__(_word, _count)
+        super().__init__(_item, _count, **kwargs)
 
         self._params['mode'] = 'main'
         self._new_examples()
 
     def _parse_doc(self,
-                   _text: str) -> List[Dict[str, str]]:
-        """ Dicts: {
-                text: russian text,
-                source: text source
-            }
-        :param _text: doc to parse
+                   _doc: bs4.element.ResultSet) -> List[Dict[str, str]]:
+        """ Dicts: {'text': russian text, 'source': text source}
+
+        :param _doc: doc to parse, spd can be > 1
         :return: list of dicts
         :exception Trouble: if wrong type given
+        :exception AssertionError: if src is not '[...]',
+         txt or src is empty
         """
-        if not(isinstance(_text, str) and _text):
-            raise Trouble(self._parse_doc, _text, _p='w_str')
+        trbl = Trouble(self._parse_doc)
+        if not isinstance(_doc, bs4.element.ResultSet):
+            raise trbl(f"Wrong type: '{_doc}'",
+                       "bs4.element.ResultSet")
 
-        # divide to groups, the last symbol is '' ever
-        text = _text.split('←…→')[:-1]
+        # one doc – one source
+        src = _doc[0].find('span', {'class': "doc"}).text
+        assert src.startswith('[') and src.endswith(']'), \
+            trbl(f"Wrong source found: '{src}'")
+
         res = []
-        for i in text:
+        for ex in _doc:
             add = {}
-            txt, src = self._txt_src(i)
+            # without find etc methods because
+            # they remove punctuation marks
+            txt = ex.get_text()
+            # remove duplicate spaces
+            txt = ' '.join(txt.split())
+            # remove src from txt
+            txt = txt[:txt.index(src)]
 
-            if not (txt and src):
-                continue
+            assert src and txt, \
+                trbl(f"Empty source or text: '{src}', '{txt}'")
 
-            add['text'] = self._clean_str(txt)
-            add['source'] = src
-            # keys checking
-            try:
-                add['source'], add['text']
-            except ValueError as trbl:
-                print(f"{trbl}, RussianCorpusExamples._parse_tag",
-                      txt, src, sep='\n')
-            except Exception as trbl:
-                print(trbl)
-            else:
-                res += [add]
+            add['text'] = txt
+            # remove braces around the source
+            add['source'] = src[1:-1]
+            # TODO: mark searched words
+            res += [add]
         return res
 
     def sort(self,
@@ -774,50 +781,28 @@ class RussianCorpusExamples(CorpusExamples):
 
 class EnglishCorpusExamples(CorpusExamples):
     """ Class to work with parallel (english) subcorpus of NCRL """
-    __slots__ = '_url', '_item', '_count', '_examples'
+    __slots__ = '_item', '_count', '_examples', '_params'
 
     def __init__(self,
-                 _word: str,
-                 _count: int) -> None:
-        """ Parent init and getting examples;
+                 _item: str,
+                 _count: int,
+                 **kwargs) -> None:
+        """ Parent init and getting examples,
+            add subcorpus tags
 
-        :param _word: str, word to find its examples
+        :param _item: str, word to find its examples
         :param _count: int, count of examples
         :return: None:
-        :exception Trouble: if wrong type given,
-        count beyond the range
+        :exception Trouble: if wrong type given or
+         count beyond the range
         """
-        super().__init__(_word, _count)
+        super().__init__(_item, _count, **kwargs)
+        # subcorpus tag
         self._params['mode'] = 'para'
+        # only English subcorpus
         self._params['mycorp'] = '%28lang%3A%22eng%22%7Clang_trans%3A%22eng%22%29'
 
         self._new_examples()
-
-    def _lang(self,
-              _text: str) -> str:
-        """ Language of the str, two alpha symbols in the beginning
-
-        :param _text: str to define its language
-        :return: 'en', 'ru' or empty str
-        :exception Trouble: if the wrong type given or
-        'ru' and 'en' not in _text
-        :exception AssertionError: if the length of lang != 2
-        """
-        _trbl = Trouble(self._lang)
-        if not isinstance(_text, str):
-            raise _trbl(_text, _p='w_str')
-
-        if not _text:
-            return ''
-
-        if not ('ru' in _text or 'en' in _text):
-            raise _trbl(f"Wrong text: '{_text}'", "'ru' or 'en' insight")
-
-        _text = _text[:3].strip()
-        res = ''.join(filter(str.isalpha, _text))
-        assert len(res) == 2, \
-            _trbl(f"Wrong length of: '{_text}'", "2")
-        return res
 
     def __join_duplicates(self,
                           trbl: List[str]) -> List[str]:
@@ -828,102 +813,82 @@ class EnglishCorpusExamples(CorpusExamples):
         :return: list of str, fixed examples
         :exception Trouble: if wrong type given
         """
-        if not (isinstance(trbl, list) and trbl):
-            raise Trouble(self.__join_duplicates, trbl, _p='w_list')
-        res, prev_lang = [], None
+        # TODO: if first sentence is the end and second is the begin?
+        # TODO
+        pass
 
-        for i in range(len(trbl)):
-            i_lang = self._lang(trbl[i])
-            if prev_lang == i_lang:
-                # TODO: if there are > 2 duplicates?
-                #  What happened with the source?
-                prev, curr = trbl[i - 1], trbl[i]
-                # brace index in previous sentence
-                pbi = prev.index('[')
-                prev_txt, prev_src = prev[:pbi], prev[pbi:]
-                curr_text = curr[:curr.index('[')].replace(i_lang, '', 1)
+    def _parse_tag(self,
+                   tag: bs4.element.Tag) -> Tuple[str, str, str]:
+        """ Parse the tag to lang, text and source
 
-                res[-1] = prev_txt + curr_text + prev_src
-            else:
-                prev_lang = i_lang
-                res += [trbl[i]]
-        return res
-
-    def __lang_txt_src(self,
-                       _text: str) -> Tuple[str, str, str]:
-        """ Parse the string to lang, text and source
-
-        :param _text: text to parse
-        :return: tuple of str: language, text and source
-        :exception trouble: if wrong type given
+        :param tag: tag to parse, bs4.element.tag
+        :return: lang, text, source
         """
-        if not (isinstance(_text, str) and _text):
-            raise Trouble(self.__lang_txt_src, _text, _p='w_str')
+        lang = tag.find('span', {'class': "b-wrd-expl"}).attrs['l']
+        source = tag.find('span', {'class': "doc"}).text
+        lang, source = lang.strip(), ' '.join(source.split())
 
-        txt, src = self._txt_src(_text)
-        lang = self._lang(txt)
-        txt = txt.replace(lang, '', 1)
-        return lang, txt, src
+        text = ' '.join(tag.get_text().split())
+        # remove source
+        text = text[:text.index(source)]
+        return lang, text, source
 
     def _parse_doc(self,
-                   _text: str) -> List[Dict[str, str]]:
+                   _doc: bs4.element.ResultSet) -> List[Dict[str, str]]:
         """ Dicts: {
                 'ru': russian text,
                 'en': english text,
                 'source': text source
             }
-        :param _text: doc to parse
+        :param _doc: doc to parse
         :return: list of dicts
         :exception Trouble: if wrong type given
+        :exception AssertionError: if anything is empty,
+         source is not '[...]' or is is en-en or ru-ru case
         """
-        if not (isinstance(_text, str) and text):
-            raise Trouble(self._parse_doc, _text, _p='w_str')
-
-        # divide to groups, the last symbol is '' ever
-        _text = _text.split('←…→')[:-1]
-
-        # if there are sentences with the same language,
-        # going in a row, unite them to the one str
-        if any(self._lang(_text[i]) == self._lang(_text[i - 1])
-               for i in range(1, len(_text))):
-            _text = self.__join_duplicates(_text)[:]
-
+        trbl = Trouble(self._parse_doc)
+        if not(isinstance(_doc, bs4.element.ResultSet)):
+            raise trbl(f"Wrong type: '{_doc}'",
+                       "bs4.element.ResultSet")
         res = []
         # original-translate going by pairs
-        for fst, sec in zip(_text[::2], _text[1::2]):
-            if not (fst and sec):
-                continue
+        for fst, sec in zip(_doc[::2], _doc[1::2]):
+            # first language, text and source
+            fl, ft, fs = self._parse_tag(fst)
+            # second language, text and source
+            sl, st, ss = self._parse_tag(sec)
+
+            assert fl and ft and fs, \
+                trbl(f"Wrong first sentence: '{fl}', '{ft}', '{fs}'")
+            assert sl and st and ss, \
+                trbl(f"Wrong second sentence: '{sl}', '{st}', '{ss}'")
+
+            # TODO: ru-ru and en-en cases
+            assert fl != sl, \
+                f"{fl}-{sl} case happened:\n {ft}, \n{st}"
+
+            assert fs.startswith('[') and fs.endswith(']'), \
+                trbl(f"First source is wrong: {fs}", "[...]")
+            assert ss.startswith('[') and ss.endswith(']'), \
+                trbl(f"Second source is wrong: {ss}", "[...]")
+
             add = {}
-            # language, text, source
-            fl, ft, fs = self.__lang_txt_src(fst)
-            sl, st, ss = self.__lang_txt_src(sec)
-            # source takes from the english text
-            # TODO: sometimes a source is better in the 'ru' text
-            src = fs if fl == 'en' else ss
+            # the best of sources
+            source = fs if '|' in fs else ss
+            add[fl], add[sl] = ft, st
+            # remove braces around the source
+            add['source'] = source[1:-1]
+            # TODO: mark searched words
+            res += [add]
 
-            add[fl], add[sl] = self._clean_str(ft), self._clean_str(st)
-            add['source'] = src
-
-            # keys checking
-            try:
-                add['ru'], add['en'], add['source']
-            except KeyError:
-                print('One of the keys is wrong',
-                      "'en', 'ru' and 'source' expected",
-                      'func – parse_tag', sep='\n')
-            except Exception as err:
-                print(err, "parse_tag", sep='\n')
-            else:
-                res += [add]
         return res
 
     def sort(self,
              key: Callable = len,
              **params):
         """ Applying the key to the english text
-            Default – sorting by len
 
-        :param key: callable obj
+        :param key: callable obj, default – len
         :param params: standard kwargs to list.sort
         :return: None
         :exception Trouble: if key is uncallable
