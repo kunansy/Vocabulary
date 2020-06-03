@@ -25,16 +25,14 @@ from src.main.constants import (
 )
 from src.trouble.trouble import Trouble
 
-SPH = 100_000
-
 
 async def fetch(_url: str,
                 _ses: ClientSession,
                 **kwargs) -> str:
-    """ Coro, obtained html code of the page;
+    """ Coro, obtaining page's html code;
 
-        If response.status != 200, (async) sleep 1
-        second, print a message and try again
+    If response.status != 200, (async) sleep
+    1 second, print a message and try again
 
     :param _url: URL to get its html code;
      URL must start with http(s)://
@@ -46,52 +44,32 @@ async def fetch(_url: str,
         if resp.status != 200:
             await asyncio.sleep(1)
             print(f"{resp.status}: '{resp.reason}'",
-                  f"error requesting to {_url}", sep='\n')
+                  f"error requesting to {_url}",
+                  f"with params: {kwargs}",
+                  sep='\n')
             return await fetch(_url, _ses, **kwargs)
 
-        html = await resp.read()
-        return html.decode(encoding='utf-8')
-
-
-async def bound_fetch(_sem: asyncio.Semaphore,
-                      _url: str,
-                      _session: ClientSession,
-                      **kwargs) -> str:
-    """ Coro, working with Semaphore
-
-    :param _sem: asyncio.Semaphore
-    :param _url: URL to get its html code;
-     URL must start with http(s)://
-    :param _session: asyncio.ClientSession
-    :param kwargs: kwargs to aiohttp.ClientSession.get()
-    :return: str, html code of the page
-    """
-    async with _sem:
-        return await fetch(_url, _session, **kwargs)
+        return await resp.text('utf-8')
 
 
 async def get_htmls_coro(_url: str,
                          p_count: int,
                          **kwargs) -> List[str]:
     """ Coro with ClientSession, creating tasks and gathering;
-        Creating and transmitting Semaphore to the next coro
 
-    :param _url: str, URL to get its html codes;
+    URLs are created for i in range(0; p_count), HTTP tag 'p' is i
+
+    :param _url: str, URL to get its html code;
      URL must start with http(s)://
     :param p_count: int, count of pages and 'p' key
      for corpus requesting
     :param kwargs: kwargs to aiohttp.ClientSession.get()
     :return: list of str, html codes of the pages
     """
-    _sem = asyncio.Semaphore(SPH)
 
     async with ClientSession() as session:
         _tasks = [
-            asyncio.create_task(
-                bound_fetch(
-                    _sem, _url, session, p=p_num, **kwargs
-                )
-            )
+            asyncio.create_task(fetch(_url, session, p=p_num, **kwargs))
             for p_num in range(p_count)
         ]
 
@@ -101,11 +79,11 @@ async def get_htmls_coro(_url: str,
 def get_htmls(_url: str,
               p_count: int,
               **kwargs) -> List[str]:
-    """ Coro running, get html code of the pages
+    """ Coro running, get html codes of the pages
 
     :param _url: str, URL to get its html code;
      URLs must start with http(s)://
-    :param p_count: int, count of pages and http key 'p'
+    :param p_count: int, count of pages and HTTP key 'p'
      for corpus requesting
     :param kwargs: kwargs to aiohttp.ClientSession.get()
     :return: list of str, html codes of the pages
@@ -134,13 +112,16 @@ def get_htmls(_url: str,
 
 class Examples:
     """ Base examples class """
-    __slots__ = '_item', '_examples'
+    __slots__ = '_item', '_examples', '_marker'
 
     def __init__(self,
-                 _word: str) -> None:
+                 _word: str,
+                 **kwargs) -> None:
         """ Init the word and examples base
 
         :param _word: str, word to find its examples
+        :keyword marker: function to highlight searched words in examples,
+         it must be callable, otherwise it is None
         :return: None
         :exception Trouble: if the wrong type given
         """
@@ -149,6 +130,12 @@ class Examples:
 
         self._item = fmt_str(_word)
         self._examples = []
+        # function to highlight searched words in examples
+        _marker = kwargs.get('marker', None)
+        if not callable(_marker):
+            self._marker = None
+        else:
+            self._marker = _marker
 
     def pop(self,
             _index: int) -> Any:
@@ -199,6 +186,56 @@ class Examples:
         """
         rand.shuffle(self._examples)
 
+    def sort(self,
+             key: Callable = len,
+             **kwargs) -> None:
+        """ Sort the examples list by the given key (callable object),
+            using standard list method;
+            Supports standard list.sort params;
+            By default – sorting by len of sentences
+
+        :param key: callable obj
+        :param kwargs: kwargs arguments to list.sort method
+        :return: None
+        :exception Trouble: if key is uncallable
+        """
+        if not callable(key):
+            raise Trouble(self.sort, key, 'callable obj')
+
+        self._examples.sort(key=lambda x: key(x), **kwargs)
+
+    def _mark_searched_words(self,
+                             _str: str,
+                             searched_words: List[str]) -> str:
+        """ Mark words in str from searched_words by using
+        str.replace function and self._marker function;
+
+        if searched_words is empty or marker is None – return str;
+
+        :param _str: str to mark words in it from searched_words list
+        :param searched_words: words to mark, list of str
+        :return: str with marked words or original str
+         if marker is None or searched_words is empty
+        :exception Trouble: if wrong type given
+        """
+        # TODO: word ['я'] string '...я хотел бы объять..' → '...Я хотел бы объЯть..'
+        # TODO: fix with re? Word to mark is surrounded by anything but letters
+        if self._marker is None:
+            return _str
+        if not searched_words:
+            return _str
+
+        trbl = Trouble(self._mark_searched_words)
+        if not (isinstance(_str, str) and _str):
+            raise trbl(_str, _p='w_str')
+        if not isinstance(searched_words, list):
+            raise trbl(searched_words, _p='w_list')
+
+        for word in searched_words:
+            _str = _str.replace(word, f"{self._marker(word)}")
+
+        return _str
+
     def __iter__(self) -> iter:
         """ Get the iter, using standard list method
 
@@ -230,24 +267,6 @@ class Examples:
                           f"Wrong value: {_item}",
                           "int or slice")
 
-    def sort(self,
-             key: Callable = len,
-             **kwargs) -> None:
-        """ Sort the examples list by the given key (callable object),
-            using standard list method;
-            Supports standard list.sort params;
-            By default – sorting by len of sentences
-
-        :param key: callable obj
-        :param kwargs: kwargs arguments to list.sort method
-        :return: None
-        :exception Trouble: if key is uncallable
-        """
-        if not callable(key):
-            raise Trouble(self.sort, key, 'callable obj')
-
-        self._examples.sort(key=lambda x: key(x), **kwargs)
-
     def __len__(self) -> int:
         """ Len of the examples list,
             using standard list method
@@ -259,17 +278,20 @@ class Examples:
 
 class SelfExamples(Examples):
     """ Class to work with self examples """
-    __slots__ = '_path', '_examples'
+    __slots__ = '_path', '_examples', '_marker'
 
     def __init__(self,
-                 path: str = SELF_EX_PATH) -> None:
+                 path: str = SELF_EX_PATH,
+                 **kwargs) -> None:
         """ Init path, load examples from it
 
         :param path: str, path to the self examples base
+        :keyword marker: function to highlight searched words in examples,
+         it must be callable, otherwise it is None
         :return: None
         :exception Trouble: if file does not exist
         """
-        super().__init__("init")
+        super().__init__("init", **kwargs)
         if not file_exist(path):
             raise Trouble(self.__init__, path, _p='w_file')
 
@@ -293,7 +315,8 @@ class SelfExamples(Examples):
 
     def find(self,
              _word: str) -> List[str]:
-        """ Find all examples of the word
+        """ Find all examples of the word,
+        mark searched word by using _marker function
 
         :param _word: str, word to find its examples,
          lowered and stripped
@@ -306,8 +329,8 @@ class SelfExamples(Examples):
 
         _word = fmt_str(_word)
         return [
-            i for i in self._examples
-            if _word in i.lower()
+            self._mark_searched_words(sent, [_word]) for sent in self._examples
+            if _word in sent.lower()
         ]
 
     def count(self,
@@ -371,8 +394,8 @@ class SelfExamples(Examples):
             return "Examples do not exist"
 
         _res = [
-            f"{i[0]}. {i[1]}"
-            for i in enumerate(self._examples, 1)
+            f"{num}. {sent}"
+            for num, sent in enumerate(self._examples, 1)
         ]
         return '\n'.join(_res)
 
@@ -436,7 +459,11 @@ class SelfExamples(Examples):
 
 class CorpusExamples(Examples):
     """ Base class of corpus examples """
-    __slots__ = '_item', '_count', '_examples', '_params'
+    __slots__ = (
+        '_item', '_count', '_examples',
+        '_params', '_marker'
+    )
+
     # max distance between neighboring words
     MAX_DIST = 2
     # documents per page
@@ -475,11 +502,13 @@ class CorpusExamples(Examples):
         :keyword sort: sort show order, default –
          by creation date in reversed order, str in sort keys dict
         :keyword spd: sentences per document, int in [1; 10]
+        :keyword marker: function to highlight searched words in examples,
+         it must be callable, otherwise it is None
         :return: None
         :exception Trouble: if wrong type given or
          count beyond the range
         """
-        super().__init__(_item)
+        super().__init__(_item, **kwargs)
         _trbl = Trouble(self.__init__)
         if not (isinstance(_count, int)):
             raise _trbl(_count, _p='w_int')
@@ -603,21 +632,24 @@ class CorpusExamples(Examples):
 
     def _find_searched_words(self,
                              tag: bs4.element.Tag) -> List[str]:
-        # TODO
+        """ Get searched words from tag, they are marked with
+        'g-em' parameter in their class; strip them
+
+        :param tag: tag with result
+        :return: list of words, to which request was
+        :exception Trouble: if wrong type given
+        """
+        if not isinstance(tag, bs4.element.Tag):
+            raise Trouble(self._find_searched_words,
+                          f"Wrong tag: {tag}",
+                          "bs4.element.Tag")
         # searched words are marked
         searched_words = tag.findAll('span', {'class': "b-wrd-expl g-em"})
-        return [i.text for i in searched_words]
 
-    def _mark_searched_words(self,
-                             _str: str,
-                             searched_words: List[str],
-                             marker: Callable) -> str:
-        # TODO
-        pass
+        return [i.text.strip() for i in searched_words]
 
     def _words_to_params(self) -> None:
-        """ Add words and distance between them to
-            params dict
+        """ Add words and distance between them to params dict
 
         :return: None
         """
@@ -705,7 +737,10 @@ class CorpusExamples(Examples):
 
 class RussianCorpusExamples(CorpusExamples):
     """ Class to work with general (russian) subcorpus of NCRL """
-    __slots__ = '_item', '_count', '_examples', '_params'
+    __slots__ = (
+        '_item', '_count', '_examples',
+        '_params', '_marker'
+    )
 
     def __init__(self,
                  _item: str,
@@ -757,11 +792,13 @@ class RussianCorpusExamples(CorpusExamples):
 
             assert src and txt, \
                 trbl(f"Empty source or text: '{src}', '{txt}'")
+            # mark searched words using _marker function
+            searched_words = self._find_searched_words(ex)
+            marked_text = self._mark_searched_words(txt, searched_words)
 
-            add['text'] = txt
+            add['text'] = marked_text
             # remove braces around the source
             add['source'] = src[1:-1]
-            # TODO: mark searched words
             res += [add]
         return res
 
@@ -781,7 +818,10 @@ class RussianCorpusExamples(CorpusExamples):
 
 class EnglishCorpusExamples(CorpusExamples):
     """ Class to work with parallel (english) subcorpus of NCRL """
-    __slots__ = '_item', '_count', '_examples', '_params'
+    __slots__ = (
+        '_item', '_count', '_examples',
+        '_params', '_marker'
+    )
 
     def __init__(self,
                  _item: str,
@@ -819,7 +859,8 @@ class EnglishCorpusExamples(CorpusExamples):
 
     def _parse_tag(self,
                    tag: bs4.element.Tag) -> Tuple[str, str, str]:
-        """ Parse the tag to lang, text and source
+        """ Parse the tag to lang, text and source,
+        Mark the searched words in the text using _marker function
 
         :param tag: tag to parse, bs4.element.tag
         :return: lang, text, source
@@ -831,6 +872,9 @@ class EnglishCorpusExamples(CorpusExamples):
         text = ' '.join(tag.get_text().split())
         # remove source
         text = text[:text.index(source)]
+        # mark searched words using _marker function
+        searched_words = self._find_searched_words(tag)
+        text = self._mark_searched_words(text, searched_words)
         return lang, text, source
 
     def _parse_doc(self,
@@ -878,7 +922,7 @@ class EnglishCorpusExamples(CorpusExamples):
             add[fl], add[sl] = ft, st
             # remove braces around the source
             add['source'] = source[1:-1]
-            # TODO: mark searched words
+
             res += [add]
 
         return res
