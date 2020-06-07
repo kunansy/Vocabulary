@@ -45,11 +45,17 @@
 
 ### Модуль «Backup»:
 1. How to use async or unsync?
+1. Downloading errors.
 
 
 ### Модуль «Примеры»:
 1. Example date with re (Why?);
-2. (Maybe) class Example: text, source etc.
+1. (Maybe) class Example: text, source etc.
+1. Catch asyncio exceptions.
+1. Mark by word's around.
+1. if there is no internet connection, set timeout
+1. if there is no access to the site
+1. in tests: req in diff lang, req with en-en or ru-ru cases,
 
 
 ### Completed:
