@@ -1,153 +1,274 @@
 __all__ = [
-    'backup', 'restore', 'list_items'
+    'backup', 'list_items', 'restore'
 ]
 
-from apiclient import errors
+from pathlib import Path
+from pprint import pprint
+from sys import stderr
 
-from src.backup.backup import (
-    Auth, print_items
-)
-from src.main.common_funcs import (
-    file_name, add_to_file_name
-)
+from googleapiclient.errors import HttpError
+from requests import get
+
+from src.backup.backup import Auth, print_items
+from src.main.common_funcs import mime_type
 from src.main.constants import (
-    VOC_PATH, mimeTypes, SELF_EX_PATH,
-    REPEAT_LOG_PATH, BACKUP_FOLDER_NAME, RESTORE_FOLDER_PATH
+    BACKUP_FOLDER_NAME, FOLDER_MTYPE
 )
+from src.trouble.trouble import Trouble
 
-drive_client = Auth()
-
-
-def backup(f_name, f_path):
-    """ Залить файл на диск в папку backup """
-    from src.main.common_funcs import file_ext
-    last_backup = drive_client.search(f_name)
-
-    if last_backup:
-        del_item(last_backup[0]['id'])
-    try:
-        # ID папки, куда заливать файл
-        fold_id = folder(BACKUP_FOLDER_NAME)
-        f_mime_type = mimeTypes[file_ext(f_name)]
-        drive_client.upload_file(f_name, f_path, f_mime_type, fold_id)
-    except Exception as trouble:
-        print(trouble, f_path, 'Terminating...', sep='\n')
-    else:
-        print(f"File: '{f_name}' successfully uploaded")
+Drive = Auth()
 
 
-def restore():
-    """ Восстановить некоторый файл из диска (игнорируя корзину):
-        предлагаются до восстановления 3 пользовательских файла,
-        выбор одного из них, далее поиск файлов на диске с похожим именем,
-        если их нет – завершение, если файл один – его и скачать, если больше,
-        то выводить имена и давать выбор, какой из них скачать;
+def pprint_http_err(err: HttpError) -> None:
+    """ Pretty print json of HttpError. Request to its uri,
+    get json from there and pprint it.
+
+    :param err: HttpError to pprint its json.
+    :return: None.
+    :exception Trouble: if wrong type given.
     """
-    # номер, имя базы, путь к ней, расширение файла
-    from src.main.common_funcs import file_ext
+    if not isinstance(err, HttpError):
+        raise Trouble(pprint_http_err, err, "HttpError", _p='w_item')
+    reason = get(err.uri).json()
+    pprint(reason)
 
-    choices = {1: ("Main data", VOC_PATH, file_ext(VOC_PATH)),
-               2: ("Self examples", SELF_EX_PATH, file_ext(SELF_EX_PATH)),
-               3: ("Repeat log", REPEAT_LOG_PATH, file_ext(REPEAT_LOG_PATH))}
 
-    print("What do you want to restore?")
-    print('\n'.join([f"{key}. {val[0]}" for key, val in choices.items()]))
+def backup(f_name: str,
+           f_path: Path) -> None:
+    """ Delete previous base and upload new one to the folder 'backup'
+     in the Drive. If there's no folder found, create it.
 
-    # TODO: добавить проверку правильности
-    choice = int(input())
-    # тип выбранной для восстановления базы
-    base_to_restore_type = choices[choice][2]
+    Print a message if sth went wrong while uploading.
+    Print a message finally about success.
 
-    # имя файла выбранной базы
-    base_to_restore_name = file_name(choices[choice][1]).split('.')[0]
+    :param f_name: string, name of base will have in the Drive.
+    :param f_path: Path, path to the file.
+    :return: None.
+    :exception Trouble: if wrong type given or the file does not exist.
+    """
+    trbl = Trouble(backup)
+    if not isinstance(f_path, Path):
+        raise trbl(f"Wrong path type: '{f_path}'", "Path")
+    if not (isinstance(f_name, str) and f_name):
+        raise trbl(f_name, _p='w_str')
+    if not f_path.exists():
+        raise trbl(f_path, _p='w_file')
 
-    # ключ для поиска айтемов для восстановления
-    search_key = "name contains '{name}' and " \
-                 "mimeType contains '{mimeType}' and " \
-                 "trashed = false"
-    _vals = {
-        'name': base_to_restore_name,
-        'mimeType': mimeTypes[base_to_restore_type]
+    folder_id = search_folder_id(BACKUP_FOLDER_NAME)
+    # if there's no backup folder found, do not try to find
+    # and delete last backup
+    if folder_id:
+        s_key = "name contains '{name}' and " \
+                "parents = '{parents}' and " \
+                "trashed = false"
+        vals = {
+            'name': f_name,
+            'parents': folder_id,
+        }
+        m_type = mime_type(f_path)
+        # mimeType can be None
+        if m_type:
+            s_key += " and mimeType = '{m_type}'"
+            vals['m_type'] = m_type
+
+        # search last base to delete
+        try:
+            last_backup = Drive.search(vals, s_key)
+        except HttpError as http_err:
+            print(trbl("HTTP error"), file=stderr)
+            # show error details
+            pprint_http_err(http_err)
+            return
+
+        if len(last_backup) == 1:
+            # delete the last base
+            last_id = last_backup[0]['id']
+            del_item(last_id, "Previous base deleted")
+        elif len(last_backup) > 1:
+            # TODO: delete oldest one
+            assert 1 == 0, \
+                trbl("More than one previous base found")
+
+    try:
+        # folder's ID, to which the file will be uploaded
+        # create it if there's not folder found
+        folder_id = folder(BACKUP_FOLDER_NAME)
+        Drive.upload_file(f_name, f_path, folder_id)
+    except HttpError as http_err:
+        print(trbl("HTTP error"), file=stderr)
+        # show error details
+        pprint_http_err(http_err)
+    except Exception as err:
+        print(trbl(f"{err}\n{f_path}"), file=stderr)
+    else:
+        print(f"File: '{f_name}' uploaded")
+
+
+def restore(f_name: str,
+            f_path: Path) -> None:
+    """ Restore a file from Drive (trash ignored), 'backup' folder.
+    Print a message and return if an exception while file searching
+    and downloading catch.
+    Print a message finally about success.
+
+    If file not found print about it.
+    If >1 files found let the user to choose which one he wants to
+    restore (there's input checking).
+
+    :param f_name: string, name of the file to restore.
+    :param f_path: Path, path to where the file will be saved.
+    :return: None.
+    :exception Trouble: if wrong type given or backup folder not found.
+    """
+    trbl = Trouble(restore)
+    if not (isinstance(f_name, str) and f_name):
+        raise trbl(f_name, _p='w_str')
+    if not isinstance(f_path, Path):
+        raise trbl(f"Wrong path type: '{f_path}'", "Path")
+    if not search_folder_id(BACKUP_FOLDER_NAME):
+        raise trbl("Backup folder not found, nothing to restore")
+    # creation demanded to search values
+    s_key = "name contains '{name}' and " \
+            "parents = '{parent}' and " \
+            "trashed = false"
+    vals = {
+        'name': f_name,
+        'parent': search_folder_id(BACKUP_FOLDER_NAME)
     }
+    fields = ['id', 'name', 'mimeType', 'modifiedTime', 'parents']
 
-    # поиск файлов на диске
-    found_items = drive_client.search(
-        _vals, s_key=search_key)
-    if not found_items:
-        print(f"'{choices[choice][0]}' not found\nTerminating...")
+    m_type = mime_type(f_path)
+    # mimeType can be None
+    if m_type:
+        s_key += " and mimeType = '{m_type}'"
+        vals['m_type'] = m_type
+
+    try:
+        found_files = Drive.search(vals, s_key, fields)
+    except KeyError:
+        print(trbl("'search_key' and 'values' must have "
+                   "the same names of fields"), file=stderr)
         return
-    elif len(found_items) == 1:
-        f_id = found_items[0]['id']
-        f_name = found_items[0]['name']
+    except HttpError as http_err:
+        print(trbl("HTTP error"), file=stderr)
+        pprint_http_err(http_err)
+        return
+    except Exception as err:
+        print(trbl(err), file=stderr)
+        return
+
+    if not found_files:
+        print(f"File with name: '{f_name}', "
+              f"mimeType: '{m_type}' not found\n",
+              "func – restore",
+              file=stderr)
+        return
+    if len(found_files) > 1:
+        print("There're > 1 files with the given name found.")
+        print("Which of them do you want to restore?")
+        print_items(found_files, 'id')
+        num = int(input())
+
+        assert 1 <= num <= len(found_files), \
+            trbl("Wrong choice")
+
+        f_id = found_files[num - 1]['id']
     else:
-        print("Enter the number: ")
-        print('\n'.join(f"{num}. {i['name']}"
-                        for num, i in enumerate(found_items, 1)))
-        # TODO: добавить проверку правильности
-        choice = int(choice) - 1
-
-        f_id = found_items[choice]['id']
-        f_name = found_items[choice]['name']
-
-    print(f"'{f_name}' restoring...")
-    f_path = RESTORE_FOLDER_PATH + f"\\{add_to_file_name(f_name, '_restored')}"
+        f_id = found_files[0]['id']
 
     try:
-        drive_client.download_file(f_id, f_path)
+        Drive.download_file(f_id, f_path)
+    except HttpError as http_err:
+        print(trbl("HTTP error"), file=stderr)
+        pprint_http_err(http_err)
     except Exception as trouble:
-        print(trouble, f_id, 'Terminating', sep='\n')
+        print(trbl(f"{trouble}\n{f_id}"), file=stderr)
     else:
-        print(f"File: '{f_path}' successfully restored")
+        print(f"File: '{f_path}' restored")
 
 
-def list_items(count=10):
-    """ Показать первые n айтемов """
-    print_items(drive_client.list_items(count))
+def list_items(count: int = 10,
+               *ignoring_keys) -> None:
+    """ Show first count items.
+
+    :param count: int, count of items.
+    :param ignoring_keys: keys to ignore.
+    :return: None.
+    """
+    print_items(Drive.list_items(count), *ignoring_keys)
 
 
-def del_item(f_id):
-    """ Удалить айтем по ID """
+def del_item(__id: str,
+             __msg: str = '') -> None:
+    """ Delete item by ID. Catch all exceptions from del_item method.
+
+    :param __id: string, item to delete.
+    :param __msg: string, message to print if everything is OK.
+    :return: None.
+    """
     try:
-        drive_client.del_item(f_id)
-    except errors.HttpError as trouble:
-        print(trouble, f_id, 'Terminating...', sep='\n')
+        Drive.del_item(__id)
+    except HttpError as http_err:
+        print("HTTP error\nfunc – del_item", file=stderr)
+        pprint_http_err(http_err)
     except Exception as trouble:
-        print(trouble, f_id, 'Terminating...', sep='\n')
+        print(trouble, __id, 'func – del_item',
+              'Terminating...', sep='\n', file=stderr)
     else:
-        print(f"Item: '{f_id}' deleted permanently")
+        print(__msg) if __msg else ...
 
 
-def search_folder_id(_name) -> str:
+def search_folder_id(_name: str) -> str:
+    """ Get folder's ID by name (ignore trash).
+
+    If there's not folder found or found > 1 folders,
+    return empty string.
+
+    :param _name: string, name of the folder to found.
+    :return: folder's ID or empty string.
+    :exception Trouble: if wrong type given
     """
-    Вернуть ID папки вне корзины по имени или пустую
-    строку, если найдено больше одной папки с таким
-    именем или не найдено вовсе
-    """
-    s_key = "name = 'name' " \
-            "and mimeType = 'mtype' " \
+    trbl = Trouble(search_folder_id)
+    if not (isinstance(_name, str) and _name):
+        raise trbl(_name, _p='w_str')
+
+    s_key = "name = '{name}' " \
+            "and mimeType = '{m_type}' " \
             "and trashed = false"
-    _vals = {
+    vals = {
         'name': _name,
-        'mtype': mimeTypes['folder']
+        'm_type': FOLDER_MTYPE
     }
-    _folders = drive_client.search(_vals, s_key)
-
-    if len(_folders) == 1:
-        return _folders[0]['id']
-    if len(_folders) > 1:
-        print(f"More than onw folder named: '{_name}' found")
-    # если фолдер не найден или найдено
-    # больше одного фолдера с таким именем
+    try:
+        _folders = Drive.search(vals, s_key)
+    except HttpError as http_err:
+        print(trbl("HTTP error"), file=stderr)
+        pprint_http_err(http_err)
+    except Exception as err:
+        print(trbl, err, sep='\n', file=stderr)
+    else:
+        if len(_folders) == 1:
+            return _folders[0]['id']
+        if len(_folders) > 1:
+            print(trbl(f"More than one folder named: '{_name}' found"),
+                  file=stderr)
+    # If there's no folder found or found > 1 folders
     return ''
 
 
-def folder(_name) -> str:
-    """ Если папка на диске существует – вернуть её ID,
-        иначе – создать новую и вернуть ID
+def folder(_name: str) -> str:
+    """ If there's folder in the Drive, return its ID,
+    else – create it and return its ID.
+
+    :param _name: string, folder name.
+    :return: string, folder's ID.
     """
     fold_id = search_folder_id(_name)
     if not fold_id:
         print(f"Backup folder does not exist, creating...")
-        fold_id = drive_client.create_folder(_name)
-        print(f"Folder '{_name}' successfully created")
+        fold_id = Drive.create_folder(_name)
+        print(f"Folder '{_name}' created")
     return fold_id
+
+
+# TODO: what is 'requests_async'?
