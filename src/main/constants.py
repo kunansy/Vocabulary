@@ -1,6 +1,8 @@
 from configparser import ConfigParser
 from pathlib import Path
 
+# absolute paths to test (otherwise it does not work)
+
 
 # path to vocabulary base
 VOC_PATH = 'vocabulary.txt'
@@ -12,13 +14,13 @@ SELF_EX_PATH = 'self_examples.txt'
 IRREGULAR_VERBS_PATH = Path('..\\..\\data\\user_data\\Irregular_verbs.txt')
 
 # Word-docs path
-DOC_FOLDER = Path('..\\..\\data\\user_data\\docx')
+DOC_FOLDER = Path('D:\\Python\\Projects\\Vocabulary\\data\\user_data\\docx')
 # Excel-docs path
-TABLE_FOLDER = Path('..\\..\\data\\user_data\\\\xlsx')
+TABLE_FOLDER = Path('D:\\Python\\Projects\\Vocabulary\\data\\user_data\\xlsx')
 # PDF-docs path
-PDF_FOLDER = Path('..\\..\\data\\user_data\\\\pdf')
+PDF_FOLDER = Path('D:\\Python\\Projects\\Vocabulary\\data\\user_data\\pdf')
 # restore files path
-RESTORE_FOLDER_PATH = Path('..\\..\\data\\user_data\\\\restore')
+RESTORE_FOLDER_PATH = Path('D:\\Python\\Projects\\Vocabulary\\data\\user_data\\restored')
 
 # standard date output format
 DATEFORMAT = '%d.%m.%Y'
@@ -30,10 +32,10 @@ DIVIDER = '_' * 50
 S_TAB = '\n\t\t\t'
 
 # path to GUI of repeat module
-MAIN_WINDOW_PATH = Path('..\\repeat\\ui\\MainWindow.ui')
-EXAMPLES_WINDOW_PATH = Path('..\\repeat\\ui\\ExamplesWindow.ui')
-MESSAGE_WINDOW_PATH = Path('..\\repeat\\ui\\MessageWindow.ui')
-SHOW_WINDOW_PATH = Path('..\\repeat\\ui\\ShowWindow.ui')
+MAIN_WINDOW_PATH = Path('D:\\Python\\Projects\\Vocabulary\\src\\repeat\\ui\\MainWindow.ui')
+EXAMPLES_WINDOW_PATH = Path('D:\\Python\\Projects\\Vocabulary\\src\\repeat\\ui\\ExamplesWindow.ui')
+MESSAGE_WINDOW_PATH = Path('D:\\Python\\Projects\\Vocabulary\\src\\repeat\\ui\\MessageWindow.ui')
+SHOW_WINDOW_PATH = Path('D:\\Python\\Projects\\Vocabulary\\src\\repeat\\ui\\ShowWindow.ui')
 
 # repeating mods for eng
 ENG_REPEAT_MODS = {
@@ -59,9 +61,9 @@ ID_LENGTH = 16
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 # path to token for the Drive
-TOKEN_PATH = Path('..\\..\\data\\program_data\\token.pickle')
+TOKEN_PATH = Path('D:\\Python\\Projects\\Vocabulary\\data\\program_data\\token.pickle')
 # path to credentials to log in to Drive
-CREDS_PATH = Path('..\\..\\data\\program_data\\client_secret.json')
+CREDS_PATH = Path('D:\\Python\\Projects\\Vocabulary\\data\\program_data\\client_secret.json')
 # folder name in Drive to backup
 BACKUP_FOLDER_NAME = 'backup'
 
@@ -78,12 +80,12 @@ ENG_PREPS = [
 FOLDER_MTYPE = 'application/vnd.google-apps.folder'
 
 _ini = ConfigParser()
-_ini.read('..\\..\\INIT.ini')
+_ini.read('D:\\Python\\Projects\\Vocabulary\\INIT.ini')
 
 
 __LANGUAGE__ = _ini['settings']['__LANGUAGE__']
 __NATIVE__ = _ini['settings']['__NATIVE__']
 
-VOC_PATH = Path(f"..\\..\\data\\user_data\\{__LANGUAGE__}_{VOC_PATH}")
-REPEAT_LOG_PATH = Path(f"..\\..\\data\\user_data\\{__LANGUAGE__}_{REPEAT_LOG_PATH}")
-SELF_EX_PATH = Path(f"..\\..\\data\\user_data\\{__LANGUAGE__}_{SELF_EX_PATH}")
+VOC_PATH = Path(f"D:\\Python\\Projects\\Vocabulary\\data\\user_data\\user_data\\{__LANGUAGE__}_{VOC_PATH}")
+REPEAT_LOG_PATH = Path(f"D:\\Python\\Projects\\Vocabulary\\data\\user_data\\{__LANGUAGE__}_{REPEAT_LOG_PATH}")
+SELF_EX_PATH = Path(f"D:\\Python\\Projects\\Vocabulary\\data\\user_data\\{__LANGUAGE__}_{SELF_EX_PATH}")
