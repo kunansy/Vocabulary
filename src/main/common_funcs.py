@@ -221,11 +221,7 @@ def get_synonyms(item: str) -> List[str]:
 
     url = SYNONYMS_SEARCH_URL.format(word=item.lower().strip(),
                                      model=SYNONYMS_SEARCH_MODEL)
-    loop = asyncio.ProactorEventLoop()
-    asyncio.set_event_loop(loop)
-
-    _future = asyncio.ensure_future(gsyns(url))
-    resp = loop.run_until_complete(_future)
+    resp = asyncio.run(gsyns(url))
 
     try:
         items = list(resp[0][SYNONYMS_SEARCH_MODEL].values())

@@ -34,7 +34,7 @@ class Auth:
         creds = self.__obtain_creds()
         self.__drive = build('drive', 'v3',
                              credentials=creds,
-                             developerKey="AIzaSyAorW26KWJsLojRjG484nW6AS5Rp6FZkSM")
+                             developerKey="")
 
     def __load(self) -> Credentials:
         """ Load credentials from the local file.
