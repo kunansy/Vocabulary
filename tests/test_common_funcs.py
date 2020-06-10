@@ -3,6 +3,7 @@ from datetime import date as DATE
 from src.main.common_funcs import (
     up_word, str_to_date, get_synonyms
 )
+from src.trouble.trouble import Trouble
 
 
 def test_str_to_date_1():
@@ -14,11 +15,11 @@ def test_str_to_date_2():
 
 
 def test_str_to_date_3():
-    assert str_to_date('12.1.1970.1488') == DATE(1970, 1, 12)
+    assert str_to_date('12.1.1970') == DATE(1970, 1, 12)
 
 
 def test_str_to_date_4():
-    assert str_to_date('12_1_1970_1488') == DATE(1970, 1, 12)
+    assert str_to_date('12_1_1970') == DATE(1970, 1, 12)
 
 
 def test_str_to_date_5():
@@ -38,7 +39,7 @@ def test_str_to_date_swap_2():
 
 
 def test_str_to_date_raise():
-    with pytest.raises(AssertionError):
+    with pytest.raises(Trouble):
         str_to_date([])
 
 
@@ -63,18 +64,13 @@ def test_up_word_1():
            "can YoU show me your PREFERENCES?"
 
 
-def test_up_word_2():
-    with pytest.raises(AssertionError):
-        up_word('abcd', 'abcde')
-
-
 def test_up_word_3():
     assert up_word('getting the got is getted the god', 'get') == \
            'GETTING the got is GETTED the god'
 
 
 def test_up_word_4():
-    with pytest.raises(AssertionError):
+    with pytest.raises(Trouble):
         up_word('strinh', '')
 
 
@@ -84,7 +80,7 @@ def test_up_word_5():
 
 
 def test_up_word_6():
-    with pytest.raises(AssertionError):
+    with pytest.raises(Trouble):
         up_word('', 'get')
 
 
@@ -113,22 +109,22 @@ def test_up_word_12():
 
 
 def test_get_synonyms_assert():
-    with pytest.raises(AssertionError):
+    with pytest.raises(Trouble):
         get_synonyms('get the')
 
 
 def test_get_synonyms_assert2():
-    with pytest.raises(AssertionError):
+    with pytest.raises(Trouble):
         get_synonyms(111)
 
 
 def test_get_synonyms_assert3():
-    with pytest.raises(AssertionError):
+    with pytest.raises(Trouble):
         get_synonyms('')
 
 
 def test_get_synonyms_assert4():
-    with pytest.raises(AssertionError):
+    with pytest.raises(Trouble):
         get_synonyms('   ')
 
 
