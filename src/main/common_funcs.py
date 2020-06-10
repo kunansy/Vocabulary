@@ -1,89 +1,83 @@
-__all__ = [
-    'today', 'word_id', 'up_word', 'add_ext',
-    'file_ext', 'clean_up', 'language', 'just_word',
-    'load_json', 'dump_json', 'file_name', 'file_exist',
-    'diff_words', 'is_russian', 'is_english', 'str_to_date',
-    'get_synonyms', 'change_words', 'diff_words_id', 'first_rus_index',
-    'add_to_file_name', 'backup_repeat_log', 'american_spelling',
-]
+__all__ = (
+    'today', 'word_id', 'up_word',
+    'clean_up', 'language', 'just_word',
+    'load_json', 'dump_json', 'fmt_str',
+    'is_russian', 'is_english', 'str_to_date',
+    'extend_filename', 'american_spelling', 'mime_type',
+    'get_synonyms', 'change_words', 'diff_words_id', 'first_rus_index'
+)
 
 
 import asyncio
-import collections
-import os
 import re
 from datetime import (
     date, datetime
 )
 from hashlib import sha3_512
 from json import loads, dump
+from mimetypes import MimeTypes
+from typing import List, Dict
 
 from aiohttp import ClientSession
-from typing import List
 
 from src.main.constants import *
 from src.trouble.trouble import Trouble
 
 
-def file_exist(f_path: str, ext='') -> bool:
+def fmt_str(item: str) -> str:
+    """ Low and strip the string.
+
+    :param item: strable, item to lowe and strip.
+    :return: string, lowed and stripped item.
+    :exception Trouble: if wrong type given.
     """
-    Есть ли доступ к файлу
+    if not hasattr(item, "__str__"):
+        raise Trouble(fmt_str, item, _p='w_str')
+    return str(item).lower().strip()
 
-    :param f_path: путь к файлу, str
-    :param ext: расширение файла, str
+
+def mime_type(file: Path or str) -> str:
+    """ Get mime type of a file.
+
+    :param file: string or Path, item to get its mime type.
+    :return: string, mime type if there's.
+    :exception Trouble: if wrong type given.
     """
-    f_path = add_ext(f_path, ext)
-    return os.access(f_path, os.F_OK)
+    if not isinstance(file, (str, Path)):
+        raise Trouble(mime_type, file, "str or Path", _p='w_item')
+
+    if isinstance(file, Path):
+        file = file.name
+    return MimeTypes().guess_type(file)[0]
 
 
-def add_ext(f_name: str, ext='') -> str:
+def extend_filename(f_path: Path,
+                    _add: str) -> Path:
+    """ Add sth to the end of a filename (before extension).
+
+    :param f_path: Path, path to the file.
+    :param _add: string, item to add.
+    :return: Path, path to the file with added str.
+    :exception Trouble: if wrong type given.
     """
-    Добавить к имени файла расширение, если его нет
+    trbl = Trouble(extend_filename, _t=True)
+    if not isinstance(f_path, Path):
+        raise trbl(f_path, f_path, "Path", _p='w_item')
+    if not (isinstance(_add, str) and _add):
+        raise trbl(_add, _p='w_str')
 
-    :param f_name: путь/имя файла, str
-    :param ext: необходимое расширение, str
-    """
-    if f_name.endswith(f".{ext}"):
-        return f_name
-    return f"{f_name}.{ext}"
+    if not f_path.suffix:
+        return Path(f"{f_path}{_add}")
 
-
-def file_name(f_path: str) -> str:
-    """ Вернуть имя файла из его пути """
-    if '\\' in f_path:
-        return f_path.split('\\')[-1]
-    elif '/' in f_path:
-        return f_path.split('/')[-1]
-    else:
-        return f_path
-
-
-def file_ext(f_path: str) -> str:
-    """
-    Получить расширение файла
-
-    :param f_path: путь к файлу
-    :return: расширение файла как всё после последней
-    точки, если оно есть, иначе – пустая строка
-    """
-    if '.' not in f_path:
-        return ''
-    return f_path.split('.')[-1]
-
-
-def add_to_file_name(f_path: str, _add: str) -> str:
-    """ Добавить что-то в конец имени файла до расширения """
-    if '.' not in f_path:
-        return f"{f_path}{_add}"
-
-    # точка может быть и в имени файла,
-    # нужен индекс последней
-    dot_rindex = f_path.rindex('.')
-    return f"{f_path[:dot_rindex]}{_add}{f_path[dot_rindex:]}"
+    return f_path.parent / f"{f_path.stem}{_add}{f_path.suffix}"
 
 
 def language(_item: str) -> str:
-    """ Есть русский символ в строке – rus, иначе – eng """
+    """ Define language of a string.
+
+    :param _item: string, item to define.
+    :return: string, if there's a Russian symbol – 'rus', else – 'eng'.
+    """
     if re.findall(r'[а-яё]', _item, re.IGNORECASE):
         return 'rus'
     return 'eng'
@@ -97,41 +91,58 @@ def is_english(_item: str) -> bool:
     return language(_item) == 'eng'
 
 
-def str_to_date(_str, swap=False) -> date:
-    """ 
-    Преобразовать переданный айтем к date, 
-    поменять местами dd и mm если swap is True
+def str_to_date(item: str or date,
+                swap: bool = False) -> date:
+    """ Convert an item to date obj.
+
+    :param item: string or date, item to convert.
+    :param swap: bool, if it's True, swap day and month.
+    :return: date, converted item.
+    :exception Trouble: if wrong type given.
     """
-    if isinstance(_str, date):
+    if isinstance(item, date):
         if swap:
-            return date(_str.year, _str.day, _str.month)
-        return _str
-    
-    assert isinstance(_str, str), \
-        Trouble(str_to_date, _str, _p='w_str')
-        # f"Wrong date: '{_str}', str expected, func – str_to_date"
+            return date(item.year, item.day, item.month)
+        return item
+    trbl = Trouble(str_to_date, _t=True)
+    if not (isinstance(item, str) and item):
+        raise trbl(item, _p='w_str')
 
-    # разделителный символ как самый частый не
-    # числовой и не буквенный символ в строке
-    split_symbol = max(list(filter(lambda x: not x.isalnum(), _str)),
-                       key=lambda x: _str.count(x))
+    item = fmt_str(item)
+    s_sym = [
+        i for i in item
+        if not i.isdigit()
+    ]
+    s_sym = max(set(s_sym), key=s_sym.count)
+    assert len(s_sym) is 1,\
+        trbl("Length of split symbols list must equal 1")
 
-    filtered_string = ''.join(filter(lambda x: x.isdigit() or x in split_symbol,
-                                     _str))
+    filtered_str = [
+        i for i in item
+        if i.isdigit() or i in s_sym
+    ]
+    filtered_str = ''.join(filtered_str)
 
-    # убрать возможный мусор из строки
-    day, month, year, *trash = filtered_string.split(split_symbol)
+    day, month, year = filtered_str.split(s_sym)
     day, month, year = int(day[:2]), int(month[:2]), int(year[:4])
 
     return date(year, day, month) if swap else date(year, month, day)
 
 
-def load_json(f_name: str) -> dict:
-    """ Вернуть словарь из json-файла """
-    assert file_exist(f_name, 'json'), \
-        Trouble(load_json, f_name, _p='w_file')
+def load_json(f_path: Path) -> dict:
+    """ Load json dict from the file.
 
-    with open(add_ext(f_name, 'json'), 'r', encoding='utf-8') as file:
+    :param f_path: Path, path to the file.
+    :return: dict, json dict from the file.
+    :exception Trouble: if the file does not exist or its ext is not 'json'.
+    """
+    trbl = Trouble(load_json, _t=True)
+    if not f_path.exists():
+        raise trbl(f_path, _p='w_file')
+    if f_path.suffix != '.json':
+        raise trbl(f"Wrong file ext: {f_path.suffix}", ".json")
+
+    with f_path.open('r', encoding='utf-8') as file:
         _res = ''.join(file.readlines())
 
     if _res:
@@ -139,168 +150,190 @@ def load_json(f_name: str) -> dict:
     return {}
 
 
-def dump_json(data: dict, f_name: str):
-    """ Вывести словарь в json-файл с отступом = 2 """
-    Trouble(dump_json, data, _p='w_dict')
-    assert isinstance(data, dict), \
-        f"Wrong data: '{data}', func – dump_json_dict"
+def dump_json(data: dict,
+              f_path: Path):
+    """ Dump dict to json file with indent = 2
 
-    with open(add_ext(f_name, 'json'), 'w') as file:
+    :param data: dict, data to dump.
+    :param f_path: Path, path to the file.
+    :return: None.
+    :exception Trouble: of wrong type given of file ext is not 'json'.
+    """
+    trbl = Trouble(dump_json, _t=True)
+    if not (isinstance(data, dict) and data):
+        raise trbl(data, _p='w_dict')
+    if not isinstance(f_path, Path):
+        raise trbl(f"Wrong file path type: '{f_path}'", "Path")
+    if f_path.suffix != '.json':
+        raise trbl(f"Wrong file ext: {f_path.suffix}", ".json")
+
+    with f_path.open('w') as file:
         dump(data, file, indent=2)
 
 
-def diff_words_id() -> list:
-    """ 
-    Получить список уникальных ID самых труднозапоминаемых 
-    (в порядке убывания) слов из лога запоминаний;
-    
-    'значимость' – сумма количества ошибочных вариантов и 
-    количества выбора этих вариантов
+def diff_words_id() -> List[str]:
+    """ Get list of ID of the unique words, most difficult to remember,
+    from the repeating log. They are sorted by worth decreasing.
+
+    Worth = wrong variants count + count of erroneous choices.
+
+    :return: List of str, words' IDs, sorted by worth decreasing.
     """
     log_dict = load_json(REPEAT_LOG_PATH)
 
-    # лог запоминаний бывает пустым
+    # repeat log can be empty
     if not log_dict:
         return []
-
-    # подсчёт значимости
+    # worth calculating
     worth = lambda x: len(x) + sum(x.values())
-    # сортировка по убыванию значимости
-    #most_error_count = dict(sorted(log_dict.items(),
-    #                               key=lambda t: worth(t[1]),
-    #                               reverse=True))
-
-    # преобразование в пары: ID слова – его значимость
-    id_to_worth = {key: worth(val)
-                   for key, val in log_dict.items()}
-
-    # пары: ID – количество слов, для которых данное является
-    # ошибочным вариантом (при кол-ве выборов > 1)
-    # TODO: переработать
-    mistaken_variants = [[j for j in filter(lambda x: log_dict[i][x] != 1, log_dict[i])]
-                         for i in log_dict],
-    mistaken_variants = sum(mistaken_variants, [])
-
-    for key, val in collections.Counter(mistaken_variants).items():
-        if key in id_to_worth:
-            id_to_worth[key] += val
-        else:
-            id_to_worth[key] = val
-
-    # сортировка слов по значимости после её изменения
-    id_to_worth = dict(sorted(id_to_worth.items(),
-                              key=lambda x: x[1],
-                              reverse=True))
-
-    return list(id_to_worth.keys())[:]
+    # sort by worth decrease
+    most_error_count = sorted(
+        log_dict.items(), key=lambda x: worth(x[1]), reverse=True)
+    return [i[0] for i in most_error_count]
 
 
-async def fetch(url: str,
-                sess: ClientSession) -> List[str]:
-    async with sess.get(url) as resp:
-        if resp.status == 200:
+async def json_from_url_coro(url: str) -> Dict[str, str]:
+    """ Coro, requesting to the url and getting json from there.
+    If an exception while json obtaining catch, return empty dict.
+
+    :param url: string, url to get json from there.
+    :return: dict, {'search_model': {'word_1': its exact; int, ...}}
+    """
+    async with ClientSession() as sess:
+        async with sess.get(url) as resp:
             try:
                 json = await resp.json()
             except:
-                return ['']
+                return {}
             else:
                 return json
 
 
-async def gsyns(url: str) -> List[str]:
-    async with ClientSession() as sess:
-        _task = asyncio.create_task(fetch(url, sess))
-        return await asyncio.gather(_task)
-
-
 def get_synonyms(item: str) -> List[str]:
-    """ Получить список связнных слов/синонимов к заданному """
-    # TODO: сортировка по близости слов
-    assert isinstance(item, str) and item, \
-        Trouble(get_synonyms, _p='w_str')
+    """ Get list of linked words/synonyms to the given word.
 
-    url = SYNONYMS_SEARCH_URL.format(word=item.lower().strip(),
-                                     model=SYNONYMS_SEARCH_MODEL)
-    resp = asyncio.run(gsyns(url))
+    :param item: string, word to find its linked words/synonyms.
+    :return: list of str, linked words/synonyms sorted by excact decreasing.
+    """
+    trbl = Trouble(get_synonyms, _t=True)
+    if not isinstance(item, str):
+        raise trbl(item, _p='w_str')
+    item = fmt_str(item)
+    if ' ' in item or not item:
+        raise trbl(item, "item without space symbol")
 
+    url = SYNONYMS_SEARCH_URL.format(
+        word=item, model=SYNONYMS_SEARCH_MODEL)
+    resp = asyncio.run(json_from_url_coro(url))
     try:
-        items = list(resp[0][SYNONYMS_SEARCH_MODEL].values())
-        items = list(
+        items = list(resp[SYNONYMS_SEARCH_MODEL].values())
+        # these items are sorted
+        items = [
             i.replace('_X', ' sth/sb').replace('_', ' ')
             for i in items[0].keys()
-        )
+        ]
     except:
         return []
     else:
-        return list(set(items))
+        return items
 
 
 def just_word(item: str) -> str:
-    """ Вернуть слово без предлогов и прочего """
-    assert isinstance(item, str) and item, \
-        f"Wrong item: '{item}', str expected, func – just_word"
+    """ Get the wort without prepositions etc
 
-    trash = ['sb', 'sth', 'not', 'no', 'do', 'doing', 'be', 'to',
-             'the', 'a', 'an', 'one', 'etc', 'that', 'those',
-             'these', 'this', 'or', 'and', 'can', 'may', 'might',
-             'could', 'should', 'must', 'would', 'your', 'my']
+    :param item: string, item to remove preps etc from there.
+    :return: string, items without preps etc.
+    :exception Trouble: if wrong type given.
+    """
+    if not (isinstance(item, str) and item):
+        raise Trouble(just_word, item, _p='w_str')
 
-    item = item.lower().replace("'", ' ').strip()
-    if ' ' not in item and '/' not in item:
+    item = fmt_str(item).replace("'", ' ')
+    if not (' ' in item or '/' in item):
         return item
-    if ' ' not in item and '/' in item:
+    elif '/' in item:
         return item.split('/')[0]
 
+    trash = [
+        'sb', 'sth', 'not', 'no', 'do', 'doing', 'be', 'to', 'the',
+        'a', 'an', 'one', 'etc', 'that', 'those', 'these', 'this',
+        'or', 'and', 'can', 'may', 'might', 'could', 'should',
+        'must', 'would', 'your', 'my'
+    ]
     item = item.split()
     item = filter(lambda x: len(x) > 1, item)
-    del_trash = list(filter(lambda x: x not in trash, item))
-    del_preps = list(filter(lambda x: x not in ENG_PREPS, del_trash))
+    del_trash = [
+        i for i in item
+        if i not in trash
+    ]
+    del_preps = [
+        i for i in item
+        if i not in ENG_PREPS
+    ]
 
     if not del_preps:
-        # если кроме предлогов ничего нет,
-        # то вернуть первый предлог
+        # if there's nothing except for preps, return first prep.
         return clean_up(del_trash[0])
     else:
         item = del_preps
 
-    item = list(filter(lambda x: len(x) > 1, item))
-    # могут быть записаны три формы глагола через /
+    # it might be three verb forms via /.
     if len(item) == 1 and '/' in item[0]:
         return clean_up(item[0].split('/')[0])
     if all('/' in i for i in item):
         return clean_up(item[0].split('/')[0])
 
-    return clean_up(list(filter(lambda x: '/' not in x, item))[0])
+    res = [
+        i for i in item
+        if '/' not in i
+    ]
+    return clean_up(res[0])
 
 
 def clean_up(item: str) -> str:
-    """ Remove unalpha symbols except for '-' """
-    assert isinstance(item, str) and item, \
-        f"Wrong item: '{item}', str expected, func – clean_up"
-    return ''.join(filter(lambda x: x.isalpha() or x in '-', item))
+    """ Remove unalpha symbols from string except for '-'.
+
+    :param item: string, item to remove wrong symbols from there.
+    :return: string, filtered item.
+    :exception Trouble: if wrong type given.
+    """
+    if not (isinstance(item, str) and item):
+        raise Trouble(clean_up, item, _p='w_str')
+
+    filtered = [
+        i for i in item
+        if i.isalnum() or i in '-'
+    ]
+    return ''.join(filtered)
 
 
 def change_words(_str: str,
                  _item: str,
                  _f) -> str:
-    """
-    Изменить в строке все похожие слова (те, в которых есть
-    item как составная часть), применив к ним функцию;
-    регистр игнорируется
-    """
-    _trbl = Trouble(change_words, _p='w_str')
-    assert isinstance(_str, str) and _str, _trbl(_str)
-    assert isinstance(_item, str) and _item, _trbl(_item)
-    assert callable(_f), _trbl(_f, 'callable object', _p='w_item')
+    """ Change all similar to the _item in the string
+    (which has the _item like component) using the func to them.
+    Register is ignored.
 
-    pattern = re.compile(f'\w*{_item}\w*', re.IGNORECASE)
-    words = pattern.finditer(_str)
+    :param _str: string, change items there.
+    :param _item: string, item to change.
+    :param _f: callable obj, func to call, changing the item.
+    :exception Trouble: if wrong type given.
+    """
+    _trbl = Trouble(change_words, _p='w_str', _t=True)
+    if not (isinstance(_str, str) and _str):
+        raise _trbl(_str)
+    if not (isinstance(_item, str) and _item):
+        raise _trbl(_item)
+    if not callable(_f):
+        raise _trbl(_f, 'callable object', _p='w_item')
+
+    words = re.finditer(fr'\w*{_item}\w*', _str, re.IGNORECASE)
 
     if not words or len(_str) < len(_item):
         return _str
     for i in words:
         begin, end = i.start(), i.end()
-        _str = _str[:begin] + _f(_str[begin:end]) + _str[end:]
+        _str = f"{_str[:begin]}{_f(_str[begin:end])}{_str[end:]}"
     return _str
 
 
@@ -312,63 +345,55 @@ def first_rus_index(item: str) -> int:
 
 def up_word(_str: str,
             _item: str) -> str:
-    """ Поднять в строке регистр слов,
-        которые содержат item
+    """ Up all words in the str, which contain the item.
+
+    :param _str: string, str to up word there.
+    :param _item: string, word to up.
+    :return: string, str with upped words.
+    :exception Trouble: if wrong type given.
     """
-    _trbl = Trouble(up_word, _p='w_str')
-    assert isinstance(_item, str) and _item, _trbl(_item)
-    assert isinstance(_str, str) and _str, _trbl(_str)
-    assert len(_str) >= len(_item), \
-        _trbl(f"Wrong len", _p=None)
-
-    _item = _item.lower().strip()
-    if _item not in _str.lower():
-        return _str
-
     return change_words(_str, _item, str.upper)
 
 
 def american_spelling(word: str) -> bool:
-    """ Соответствует ли слово американской манере письма """
-    assert isinstance(word, str) and word, \
-        Trouble(american_spelling, word, _p='w_str')
+    """ Does the word fit with american spelling.
+
+    :param word: string, word to check.
+    :return: bool, fit – True, doesn't – False.
+    :exception Trouble: if wrong item given.
+    """
+    if not (isinstance(word, str) and word):
+        raise Trouble(american_spelling, word, _p='w_str', _t=True)
     # wrong ends
     pattern = re.compile(r'\w*(uo|tre|nce|mm|ue|se|ll|re)\W', re.IGNORECASE)
+    # if there're wrong ends found, the word doesn't fit
     return bool(pattern.findall(word))
 
 
-def word_id(_item: str) -> str:
+def word_id(item: str) -> str:
+    """ Get words ID. ID – first and last 8 symbol from
+    sha3_512 hash.
+
+    :param item: string, item to get its ID.
+    :return: string, ID.
+    :exception Trouble: if wrong type given.
     """
-    Получить ID переданного строкой слова; ID – первые
-    и последние восемь символов sha3_512 хеша этого слова
-    """
-    assert isinstance(_item, str), \
-        Trouble(word_id, _item, _p='w_str')
-    # пустой item – пустой ID
-    if not _item:
+    if not isinstance(item, str):
+        raise Trouble(word_id, item, _p='w_str', _t=True)
+    # empty item – empty ID
+    if not item:
         return ''
 
-    _id = sha3_512(bytes(_item, encoding='utf-8')).hexdigest()
+    _id = sha3_512(bytes(item, encoding='utf-8')).hexdigest()
     return _id[:ID_LENGTH // 2] + _id[-ID_LENGTH // 2:]
 
 
-def today(d_frmt=DATEFORMAT):
-    """ Today: format is None – DATE, else – d_frmt """
+def today(fmt=DATEFORMAT) -> str or date:
+    """ Get today: date obj or str with the date format.
+
+    :param fmt: string, date format.
+    :return: string or date obj, format is None – date, else – str.
+     with the date format.
+    """
     _res = datetime.now().date()
-    return _res if d_frmt is None else _res.strftime(d_frmt)
-
-
-def diff_words(_base):
-    """ Most difficult words from json base """
-    _ids = diff_words_id()
-    return _base.search_by_id(_ids)
-
-
-def backup_repeat_log():
-    """ Backup лога повторений """
-    from src.backup.backup_setup import backup
-
-    print("Repeat log backupping...")
-    f_name = file_name(REPEAT_LOG_PATH)
-    backup(f_name, REPEAT_LOG_PATH)
-
+    return _res if fmt is None else _res.strftime(fmt)
