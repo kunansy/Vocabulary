@@ -1,6 +1,6 @@
-__all__ = [
+__all__ = (
     'backup', 'list_items', 'restore'
-]
+)
 
 from pathlib import Path
 from pprint import pprint
@@ -46,7 +46,7 @@ def backup(f_name: str,
     :return: None.
     :exception Trouble: if wrong type given or the file does not exist.
     """
-    trbl = Trouble(backup)
+    trbl = Trouble(backup, _t=True)
     if not isinstance(f_path, Path):
         raise trbl(f"Wrong path type: '{f_path}'", "Path")
     if not (isinstance(f_name, str) and f_name):
@@ -55,7 +55,7 @@ def backup(f_name: str,
         raise trbl(f_path, _p='w_file')
 
     folder_id = search_folder_id(BACKUP_FOLDER_NAME)
-    # if there's no backup folder found, do not try to find
+    # if there's no backup folder found, don't try to find
     # and delete last backup
     if folder_id:
         s_key = "name contains '{name}' and " \
@@ -166,11 +166,13 @@ def restore(f_name: str,
     if len(found_files) > 1:
         print("There're > 1 files with the given name found.")
         print("Which of them do you want to restore?")
-        print_items(found_files, 'id')
+        print_items(found_files, 'id', 'parents')
         num = int(input())
 
-        assert 1 <= num <= len(found_files), \
-            trbl("Wrong choice")
+        while num < 1 or num > len(found_files):
+            print("Wrong choice, try again!", file=stderr)
+            print(f"Nums in [1;{len(found_files)}]", file=stderr)
+            num = int(input())
 
         f_id = found_files[num - 1]['id']
     else:
