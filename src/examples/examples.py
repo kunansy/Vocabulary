@@ -16,9 +16,9 @@ from typing import (
 import aiohttp
 import bs4
 
-from src.backup.backup_setup import backup
+from src.backup.setup import backup
 from src.main.common_funcs import (
-    fmt_str, extend_filename
+    fmt_str, extend_filename, clean_up
 )
 from src.main.constants import (
     SELF_EX_PATH, CORPUS_URL
@@ -205,34 +205,34 @@ class Examples:
 
     def _mark_searched_words(self,
                              _str: str,
-                             words_indexes: List[int]) -> str:
-        """ Mark words in str by indexes in words_indexes by using
-        self._marker function.
+                             _words: List[str]) -> str:
+        """ Mark words in str by using self._marker function.
 
-        if searched_words is empty or marker is None – return _str.
+        if _words is empty or marker is None – return _str.
 
         :param _str: string, str to mark words.
-        :param words_indexes: list of int, indexes of words to mark.
+        :param _words: list of strings, searched words to mark.
         :return: string, str with marked words or original str
-         if marker is None or searched_words is empty.
+         if marker is None or _words is empty.
         :exception Trouble: if wrong type given.
         """
-        if self._marker is None or not words_indexes:
+        if self._marker is None or not _words:
             return _str
 
         trbl = Trouble(self._mark_searched_words)
         if not (isinstance(_str, str) and _str):
             raise trbl(_str, _p='w_str')
-        if not isinstance(words_indexes, list):
-            raise trbl(words_indexes, _p='w_list')
-        if not all(isinstance(i, int) for i in words_indexes):
-            raise trbl(f"Wrong words_indexes: '{words_indexes}'",
-                       "list of int")
+        if not isinstance(_words, list):
+            raise trbl(_words, _p='w_list')
+        if not all(isinstance(i, str) for i in _words):
+            raise trbl(f"Wrong _words: '{_words}'",
+                       "list of str")
 
         words = _str.split()
         marked_words = [
-            self._marker(i) if index in words_indexes else i
-            for index, i in enumerate(words)
+            self._marker(i)
+            if any(sw.lower() == clean_up(i).lower() for sw in _words) else i
+            for i in words
         ]
         return ' '.join(marked_words)
 
@@ -333,7 +333,7 @@ class SelfExamples(Examples):
 
         _word = fmt_str(_word)
         return [
-            self._mark_searched_words(sent, [sent.index(_word)])
+            self._mark_searched_words(sent, [_word])
             for sent in self._examples
             if _word in sent.lower()
         ]
@@ -619,7 +619,7 @@ class CorpusExamples(Examples):
                       sep='\n', file=stderr)
             else:
                 res += parsed_doc
-            # TODO
+            # TODO: if n examples obtained from < n // 5 pages
             if len(res) >= self._count:
                 return res
 
@@ -640,30 +640,31 @@ class CorpusExamples(Examples):
         return sum([self._parse_page(page) for page in htmls], [])
 
     def _find_searched_words(self,
-                             tag: bs4.element.Tag) -> List[int]:
-        """ Get searched words's indexes from tag, they are marked with
-        'g-em' parameter in their class.
+                             tag: bs4.element.Tag) -> List[str]:
+        """ Get searched words from tag, they are marked with 'g-em'
+        parameter in their class. Strip them.
 
-        :param tag: tag with result
-        :return: list of int, indexes of the words to which request was
-        :exception Trouble: if wrong type given
+        :param tag: tag with result.
+        :return: list of string, words to which request was.
+        :exception Trouble: if wrong type given.
         """
         if not isinstance(tag, bs4.element.Tag):
             raise Trouble(self._find_searched_words,
                           f"Wrong tag: {tag}",
                           "bs4.element.Tag")
-        # params of the classes if 'class' is
+        # params of the classes and word if 'class' is
         class_params = [
-            i.attrs.get('class', '')
+            (i.attrs.get('class', ''), i.text)
             for i in tag.contents
             if isinstance(i, bs4.element.Tag)
         ]
         # searched words are marked by class parameter 'g-em'
-        indexes = [
-            num for num, i in enumerate(class_params)
-            if 'g-em' in i
+        searched_words = [
+            i[1] for num, i in enumerate(class_params)
+            if 'g-em' in i[0]
         ]
-        return indexes
+        searched_words = [i.strip() for i in searched_words]
+        return searched_words
 
     def _words_to_params(self) -> None:
         """ Add words and distance between them to params dict
@@ -878,17 +879,17 @@ class EnglishCorpusExamples(CorpusExamples):
                    tag: bs4.element.Tag) -> Tuple[str, str, str]:
         """ Parse the tag to lang, text and source; Remove duplicate
         spaces and '" symbols; Mark the searched words in the text
-        using _marker function
+        using _marker function.
 
-        :param tag: tag to parse, bs4.element.tag
-        :return: lang, text, source
+        :param tag: bs4.element.tag, tag to parse.
+        :return: lang, text, source.
         """
         lang = tag.find('span', {'class': "b-wrd-expl"}).attrs['l']
         source = tag.find('span', {'class': "doc"}).text
         lang, source = lang.strip(), ' '.join(source.split())
 
+        # using findall method to get text removes punctuation marks.
         text = ' '.join(tag.get_text().split())
-        # TODO: <wrong marked> maybe because this?
         text = text.replace("''", "'").replace('""', '"')
         # remove source
         text = text[:text.index(source)]
@@ -908,7 +909,7 @@ class EnglishCorpusExamples(CorpusExamples):
         :return: list of dicts
         :exception Trouble: if wrong type given
         :exception AssertionError: if anything is empty,
-         source is not '[...]' or is is en-en or ru-ru case
+         source is not '[...]' or it is an en-en or ru-ru case
         """
         trbl = Trouble(self._parse_doc)
         if not (isinstance(_doc, bs4.element.ResultSet)):
@@ -920,14 +921,14 @@ class EnglishCorpusExamples(CorpusExamples):
             try:
                 # first language, text and source
                 fl, ft, fs = self._parse_tag(fst)
-            except ValueError:
-                print(trbl(f"Wrong first, substring not found: {fst}"), file=stderr)
+            except ValueError as v_err:
+                print(trbl(f"Wrong first, {v_err}: {fst}"), file=stderr)
                 continue
             try:
                 # second language, text and source
                 sl, st, ss = self._parse_tag(sec)
-            except ValueError:
-                print(trbl(f"Wrong second, substring not found: {sec}"), file=stderr)
+            except ValueError as v_err:
+                print(trbl(f"Wrong second, {v_err}: {sec}"), file=stderr)
                 continue
 
             assert fl and ft and fs, \
@@ -937,7 +938,7 @@ class EnglishCorpusExamples(CorpusExamples):
 
             # TODO: ru-ru and en-en cases
             assert fl != sl, \
-                trbl(f"{fl}-{sl} case happened, skip")
+                trbl(f"{fl}-{sl} case happened, skip the doc")
 
             assert fs.startswith('[') and fs.endswith(']'), \
                 trbl(f"First source is wrong: {fs}", "[...]")
@@ -945,7 +946,7 @@ class EnglishCorpusExamples(CorpusExamples):
                 trbl(f"Second source is wrong: {ss}", "[...]")
 
             add = {}
-            # the best of sources
+            # the best of sources, where ru and en src translation are
             source = fs if '|' in fs else ss
             add[fl], add[sl] = ft, st
             # remove braces around the source
@@ -984,13 +985,4 @@ class EnglishCorpusExamples(CorpusExamples):
 # TODO: if there is no access to the site
 # TODO: in tests: req in diff lang, req with en-en or ru-ru cases,
 # TODO: write tests and docs to all features
-# TODO: define comparison operators to CorpusExamples class
-# are there 4 en-en cases going in the row?
-# eng = EnglishCorpusExamples('promise', 20, marker=str.upper)
-
-# Wrong marked:
-# 1. (request 'promise', ece) ...he promised IN Sochi.
-# 2. (request 'promise', ece) ...the promise OF...
-# 3. (request 'я', rce) ...где Я учился ... я ПОЕХАЛ на ... что я УЧУСЬ...
-# 4. (request 'я', rce) ...21-я ПЕХОТНАЯ...
-# That is because removing by parse_tag unalnum symbols is indexing by find_search_words
+# TODO: define comparison operators to CorpusExamples class (why?)
