@@ -5,7 +5,7 @@ __all__ = 'Auth', 'print_items'
 import io
 import pickle
 from pathlib import Path
-from sys import stderr
+import sys
 from typing import List, Dict
 
 from apiclient import http
@@ -14,27 +14,39 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from src.main.constants import (
-    SCOPES, FOLDER_MTYPE, TOKEN_PATH,
-    CREDS_PATH
-)
-from src.trouble.trouble import Trouble
-from src.main.common_funcs import mime_type
+from src.main import constants as const
+import src.main.common_funcs as comm_func
+
+
+# folder name in Drive to backup
+BACKUP_FOLDER_NAME = 'backup'
+# demanded to Drive types
+FOLDER_MTYPE = 'application/vnd.google-apps.folder'
+# If modifying these scopes, delete the file token.pickle
+SCOPES = ['https://www.googleapis.com/auth/drive']
+# path to token for the Drive
+TOKEN_PATH = const.PROGRAM_DATA_BASE_PATH / 'token.pickle'
+# path to credentials to log in to Drive
+CREDS_PATH = const.PROGRAM_DATA_BASE_PATH / 'client_secret.json'
 
 
 class Auth:
     def __init__(self) -> None:
-        """ Get credentials from local file or log in to.
+        """ Get credentials from a local file or log in to
         Google if there're no (valid) ones.
         
         Init drive with them.
         
         :return: None.
         """
+        # it's a secret, nobody is to know it...
+        api_key_path = const.DATA_BASE_PATH / 'program_data' / 'drive_API_key'
+        api_key = api_key_path.open().read()
+
         creds = self.__obtain_creds()
         self.__drive = build('drive', 'v3',
                              credentials=creds,
-                             developerKey="")
+                             developerKey=api_key)
 
     def __load(self) -> Credentials:
         """ Load credentials from the local file.
@@ -42,7 +54,7 @@ class Auth:
         :return: credentials.
         """
         if not TOKEN_PATH.exists():
-            raise Trouble(self.__load, TOKEN_PATH, _p='w_file')
+            raise FileExistsError("Token not found")
 
         with TOKEN_PATH.open('rb') as file:
             return pickle.load(file)
@@ -54,8 +66,8 @@ class Auth:
         :param __creds: credentials to dump.
         :return: None.
         """
-        with open(TOKEN_PATH, 'wb') as _token:
-            pickle.dump(__creds, _token)
+        with TOKEN_PATH.open('wb') as token:
+            pickle.dump(__creds, token)
 
     def __obtain_creds(self) -> Credentials:
         """ Get credentials from the local file if they exist.
@@ -105,14 +117,14 @@ class Auth:
         :exception Trouble: if the file does not exist.
         """
         if not __path.exists():
-            raise Trouble(self.upload_file, __path, _p='w_file')
+            raise FileNotFoundError("File to upload not found")
 
         file_metadata = {
             'name': __name,
             'parents': [__folder_id]
         }
         # mime type getting
-        m_type = mime_type(__path)
+        m_type = comm_func.mime_type(__path)
         media = http.MediaFileUpload(__path, mimetype=m_type)
 
         _file = self.__drive.files().create(
@@ -121,8 +133,8 @@ class Auth:
         return _file.get('id')
 
     # TODO: some first bytes (symbols) losing.
-    # TODO: it cannot download media files (like PDF or mp4).
-    # TODO: in cannot download files encoding UTF-8.
+    # TODO: it's unavailable to download media files (like PDF or mp4).
+    # TODO: it's unavailable to download files encoding UTF-8.
     def download_file(self,
                       __id: str,
                       __path: Path) -> None:
@@ -132,6 +144,7 @@ class Auth:
         :param __path: Path, path to download the file.
         :return: None.
         """
+        # m_type = mime_type(__path)
         _request = self.__drive.files().get_media(fileId=__id)
         _fh = io.BytesIO()
         _downloader = http.MediaIoBaseDownload(_fh, _request)
@@ -140,8 +153,8 @@ class Auth:
         while _done is False:
             try:
                 status, _done = _downloader.next_chunk()
-            except Exception as trouble:
-                print(Trouble(self.download_file, trouble), file=stderr)
+            except Exception as e:
+                print(f"{e}\nwhile downloading file: {__path}", file=sys.stderr)
                 return
 
             print(f"Download {int(status.progress() * 100)}%")
@@ -151,16 +164,15 @@ class Auth:
             f.write(_fh.read())
 
     def search(self,
+               __s_key: str,
                __values: Dict[str, str],
-               __s_key: str = "name = '{name}'",
                __fields: List[str] = ("id", "name", "mimeType")) -> List[Dict[str, str]]:
         """ Search items by the key.
 
-        All dict's keys must be in search key too.
+        All key's and dict's keys must coincide and be in the fields.
 
+        :param __s_key: string, search key format: "query_term operator '{value}'".
         :param __values: dict of str, values for search key.
-        :param __s_key: string, search key format: "query_term operator '{value}'",
-        by default – "name = '{name}'".
 
         Example:
             key= "name = '{name}' and trashed = false and id = '{id}'",
@@ -227,21 +239,12 @@ def print_items(__items: List[Dict],
     :param __items: list of dicts.
     :param ignoring_keys: keys to ignore.
     :return: None.
-    :exception Trouble: if wrong type given.
     """
-    trbl = Trouble(print_items)
-    if not isinstance(__items, list):
-        raise trbl(__items, _p='w_list')
-    if not all(isinstance(i, dict) for i in __items):
-        raise trbl(__items[0], _p='w_dict')
-    if not all(isinstance(i, str) for i in ignoring_keys):
-        raise trbl(ignoring_keys, _p='w_str')
-
     if not __items:
         print('No files found')
         return
 
-    # if all keys were ignored
+    # if all keys are ignored
     if all(i in ignoring_keys for i in __items[0].keys()):
         print("All keys were ignored")
         return
