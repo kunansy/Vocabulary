@@ -198,331 +198,246 @@ class Properties:
 
 
 class Word:
-    __slots__ = ['word', 'id', 'transcription',
-                 'properties', 'original', 'native']
+    __slots__ = (
+        '_word', '_id', '_properties',
+        '_english_defs', '_russian_defs')
 
-    def __init__(self, word='', transcription='',
-                 properties='', original_def=[], native_def=[]):
+    def __init__(self,
+                 word: str = '',
+                 properties: set = None,
+                 english_defs: List[str] = None,
+                 russian_defs: List[str] = None) -> None:
         """
-        :param word: original word to learn
-        :param properties: POS, language level, formal, ancient,
-        if verb (transitivity, ) if noun (countable, )
-        :param original_def: original definitions of the word: list
-        :param native_def: native definitions of the word (maybe don't exist): list
+        :param word: str, word to learn.
+        :param properties: str, language level, formal, ancient etc.
+        :param english_defs: list of str, original definitions of the word.
+        :param russian_defs: list of str, native definitions of the word.
         """
-        assert isinstance(word, str), \
-            f"Wrong word: '{word}', '{word}', func – Word.__init__"
-        assert isinstance(transcription, str), \
-            f"Wrong transcription: '{transcription}', func – Word.__init__"
-        assert isinstance(properties, (str, Properties)), \
-            f"Wrong properties: '{properties}', func – Word.__init__"
-        assert isinstance(original_def, (list, str)), \
-            f"Wrong original_def: '{original_def}', func – Word.__init__"
-        assert isinstance(native_def, (list, str)), \
-            f"Wrong native_def: '{native_def}', func – Word.__init__"
+        self._word = comm_func.fmt_str(word)
+        self._id = comm_func.word_id(self._word)
 
-        if ' – ' in word:
-            self.__init__(*parse_str(word))
-        else:
-            self.word = word.lower().strip()
-            self.id = word_id(self.word)
-            self.transcription = transcription.replace('|', '').strip()
+        self._english_defs = english_defs or []
+        self._russian_defs = russian_defs or []
+        properties = properties or set()
 
-            if isinstance(native_def, str):
-                native_def = native_def.split(';')
+        properties = set(
+            comm_func.fmt_str(prop)
+            for prop in properties
+        )
+        self._properties = properties
 
-            if isinstance(original_def, str):
-                original_def = original_def.split(';')
+    @property
+    def word(self) -> str:
+        """ Get the word.
 
-            self.original = list(filter(len, map(str.strip, original_def)))
-            self.native = list(filter(len, map(str.strip, native_def)))
-
-            self.properties = ''
-
-            if isinstance(properties, Properties):
-                self.properties = properties
-            elif isinstance(properties, str):
-                self.properties = Properties(properties)
-
-    def get_native(self, def_only=False):
+        :return: str, word.
         """
-        Вовзращает русские определения
-        :param def_only: True – только определения, False – термин и определения
+        return self._word
+
+    @property
+    def id(self) -> str:
+        """ Get word's id.
+
+        :return: str, word's id.
         """
-        if def_only:
-            return '; '.join(self.native)
-        return f"{self.word} – {'; '.join(self.native)}".capitalize()
+        return self._id
 
-    def get_original(self, def_only=False):
+    @property
+    def english(self) -> List[str]:
+        """ Get English defs of the word.
+
+        :return: list of str, English defs.
         """
-        Возвращает английские определения
-        :param def_only: True – только определения, False – термин и определения
+        return self._english_defs
+
+    @property
+    def russian(self) -> List[str]:
+        """ Get Russian defs of the word.
+
+        :return: list of str, Russian defs.
         """
-        if def_only:
-            return '; '.join(self.original)
-        return f"{self.word} – {'; '.join(self.original)}".capitalize()
+        return self._russian_defs
 
-    def get_transcription(self):
-        return f"/{self.transcription}/" * (len(self.transcription) != 0)
+    @property
+    def properties(self) -> set:
+        """ Get word's properties.
 
-    def get_id(self):
-        """ Вернуть либо ID слова """
-        return self.id if self.id else word_id(self.word)
+        :return: set, word's properties.
+        """
+        return self._properties
 
-    def is_fit(self, *properties):
-        """ Соотвествует ли слово переданным свойствам """
-        return all(self.properties[i] for i in properties)
+    def with_english(self) -> str:
+        """ Get the word with its English defs.
 
-    def lower(self) -> str:
-        return self.word.lower()
+        :return: str, word with its English defs.
+        """
+        defs = '; '.join(self.english)
+        word = self.word.capitalize()
+        return f"{word} – {defs}"
 
-    def strip(self) -> str:
-        return self.word.strip()
+    def with_russian(self) -> str:
+        """ Get the word with its Russian defs.
 
-    def __getitem__(self, index):
+        :return: str, word with its Russian defs.
+        """
+        defs = '; '.join(self.russian)
+        word = self.word.capitalize()
+        return f"{word} – {defs}"
+
+    def is_fit(self,
+               *properties) -> bool:
+        """
+        :param properties: list of str, properties to check.
+        :return: bool, whether the word fit with the properties.
+        """
+        return all(
+            prop.lower() in self.properties
+            for prop in properties
+        )
+
+    def __getitem__(self,
+                    index: int or slice) -> str:
+        """ Get symbol by the index or create str with slice.
+
+        :param index: int or slice.
+        :return: result str.
+        """
         return self.word[index]
 
-    def __iter__(self):
+    def __iter__(self) -> iter:
+        """
+        :return: iter to the word.
+        """
         return iter(self.word)
 
-    def __add__(self, other):
-        """
-        :param other: строку с ' – ' для преобразования к Word или сам объект класса Word
-        :return: если термины одни и те же – просуммирует списки определений и свойств
-        """
-        if isinstance(other, str) and ' – ' not in other or not isinstance(other, Word):
-            raise ValueError(f"'Operation +' between 'class Word' and '{type(other)}' does not support")
+    def __add__(self,
+                other: Any) -> Any:
+        """ Join defs, properties of two objects.
 
-        if isinstance(other, str):
-            other = Word(other)
+        :param other: Word to join with self.
+        :return: Word obj, joined items.
+        :exception TypeError: if wrong type given.
+        :exception ValueError: if the word aren't equal.
+        """
+        if not isinstance(other, Word):
+            raise TypeError(f"Operator + between Word and str isn't supported")
 
-        if self != other and len(self) != 0 and len(other) != 0:
-            raise ValueError(f"'Operator +' demands for the equality words")
+        if self.word != other.word and self.word != other.word != '':
+            raise ValueError("Operator + demands for the equal words")
 
         return Word(
             max(self.word, other.word),
-            self.transcription,
-            other.properties + self.properties,
-            other.original[:] + self.original[:],
-            other.native[:] + self.native[:],
+            self.properties.union(other.properties),
+            other.english + self.english,
+            other.russian + self.russian
         )
 
-    def __eq__(self, other):
-        if isinstance(other, str):
-            return self.word == other.lower().strip()
-        # TODO
-        if isinstance(other, Word):
-            return self.word == other and \
-                   self.properties == other.properties
-        if isinstance(other, int):
-            return len(self.word) == other
+    def __eq__(self,
+               other: Any) -> bool:
+        """ ==
+        If other is int, comparing len of the word with it.
+        If other is Word, comparing the words.
 
-    def __ne__(self, other):
+        :param other: int or Word to compare.
+        :return: bool, whether word equals to the item.
+        :exception TypeError: if wrong type given.
+        """
+        if isinstance(other, str):
+            return self.word == other.strip()
+        if isinstance(other, Word):
+            return (self.word == other.word and
+                    self.properties == other.properties)
+
+        raise TypeError(f"Demanded str or Word, but '{type(other)}' given")
+
+    def __ne__(self,
+               other: Any) -> bool:
+        """ != """
         return not (self == other)
 
-    def __gt__(self, other):
+    def __gt__(self,
+               other: Any) -> bool:
+        """ > """
         if isinstance(other, str):
-            return self.word > other.lower().strip()
+            return self.word > other.strip()
         if isinstance(other, Word):
             return self.word > other.word
-        if isinstance(other, int):
-            return len(self.word) > other
 
-    def __lt__(self, other):
+        raise TypeError(f"Demanded str or Word, but '{type(other)}' given")
+
+    def __lt__(self,
+               other: Any) -> bool:
+        """ < """
         return self != other and not (self > other)
 
-    def __ge__(self, other):
+    def __ge__(self,
+               other: Any) -> bool:
+        """ >= """
         return self > other or self == other
 
-    def __le__(self, other):
+    def __le__(self,
+               other: Any) -> bool:
+        """ <= """
         return self < other or self == other
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        :return: int, length of the word.
+        """
         return len(self.word)
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
+        """
+        :return: bool, whether the word exists (not empty).
+        """
         return bool(self.word)
 
-    def __contains__(self, item):
-        """ Если в item есть '–', или item содержит
-            кириллические символы – посик по определениям
+    def __contains__(self,
+                     item: str) -> bool:
         """
-        if isinstance(item, str):
-            item = item.lower().strip()
-
-            # работает по определениям
-            if '–' in item or is_russian(item):
-                item = item.replace('–', '').strip()
-
-                if is_russian(item):
-                    return item in self.get_native(def_only=True)
-                return item in self.get_original(def_only=True)
-
-            # по словам
-            return item in self.word or self.word in item
-
-        if isinstance(item, Word):
-            return self.word in item.word or item.word in self.word
-
-    def __str__(self):
-        transcription = f" /{self.transcription}/" * (len(self.transcription) != 0)
-        properties = f" {self.properties}" * (len(self.properties) != 0)
-        learn = f"{'; '.join(self.original)}\t" * (len(self.original) != 0)
-        rus = f"{'; '.join(self.native)}" * (len(self.native) != 0)
-
-        return f"{self.word.capitalize()}{transcription}{properties} – {learn}{rus}"
-
-    def __hash__(self):
-        return hash(
-            hash(self.word) +
-            hash(self.transcription) +
-            hash(self.properties) +
-            hash(tuple(self.native)) +
-            hash(tuple(self.original))
+        :return: bool, whether the defs or the word contains given item.
+        """
+        item = comm_func.fmt_str(item)
+        return any(
+            item in definition
+            for definition in [self.word] + self.english + self.russian
         )
 
+    def __str__(self) -> str:
+        """ Str format:
+        `word [properties] – English defs; Russian defs.`
 
-class WordsPerDay:
-    __slots__ = ['date', 'content']
+        Or without properties.
 
-    def __init__(self, content, date):
+        :return: str this format.
         """
-        :param content: list or iterator объектов класса Word
-        :param date: дата изучения
+        word = self.word.capitalize()
+        properties = f" [{self.properties}]" * bool(self.properties)
+        eng = f"{'; '.join(self.english)}\t" * bool(self.english)
+        rus = f"{'; '.join(self.russian)}" * bool(self.russian)
+
+        return f"{word}{properties} – {eng}{rus}"
+
+    def __hash__(self) -> int:
         """
-        assert isinstance(date, (str, DATE)), \
-            f"Wrong date: {date}, func – WordsPerDay.__init__"
-
-        self.date = str_to_date(date)
-        self.content = list(sorted(content))
-
-    def native_only(self, def_only=False):
+        :return: int, hash the word and the properties.
         """
-        :param def_only: return words with its definitions or not
-        :return: the list of the words with its native definitions, the day contains
+        return sum(self.word) + hash(self.properties)
+
+    def __repr__(self) -> str:
+        """ Str format:
+            Word: ...
+            Properties: ...
+            English: ...
+            Russian: ...
+
+        :return: str this format.
         """
-        return reduce(
-            lambda res, elem: res + [elem.get_native(def_only)],
-            self.content, 
-            []
-        )
-
-    def original_only(self, def_only=False):
-        """
-        :param def_only: return words with its definitions or not
-        :return: the list of the words with its original definitions, the day contains
-        """
-        return reduce(
-            lambda res, elem: res + [elem.get_original(def_only)],
-            self.content, 
-            []
-        )
-
-    def get_words_list(self, with_original=False,
-                       with_rus=False):
-        """
-        :param with_original: return words with original its definitions or not
-        :param with_rus: return words with its native definitions or not
-        :return: the list of the words, the day contains, with its original/native definitions
-        """
-        rus = lambda x: f"{x.get_native(def_only=True)}" * int(with_rus)
-        original = lambda x: f"{x.get_original(def_only=True)}" * int(with_original)
-
-        devis = lambda x: ' – ' * ((len(rus(x)) + len(original(x))) != 0)
-
-        value = lambda x: f"{x.word}{devis(x)}{original(x)}{rus(x)}"
-
-        return reduce(
-            lambda res, elem: res + [value(elem)], 
-            self.content,
-            []
-        )
-
-    def get_content(self):
-        return self.content[:]
-
-    def get_date(self, dateformat=None):
-        return self.date if dateformat is None else self.date.strftime(dateformat)
-
-    def get_info(self):
-        return f"{self.get_date(DATEFORMAT)}\n{len(self)}"
-
-    def repeat(self, **params):
-        pass
-        # app = QApplication(argv)
-        #
-        # repeat = RepeatWords(words=self.content,
-        #                      window_title=self.get_date(DATEFORMAT),
-        #                      **params)
-        # repeat.test()
-        # repeat.show()
-        #
-        # exit(app.exec_())
-
-    def create_docx(self):
-        create_docx(self.content,
-                    header=self.get_date(DATEFORMAT))
-
-    def create_pdf(self):
-        create_pdf(self.content,
-                   f_name=self.get_date(DATEFORMAT))
-
-    def search_by_properties(self, *properties):
-        return list(filter(lambda x: x.is_fit(*properties), self.content))
-
-    def __len__(self):
-        """ Количество слов """
-        return len(self.content)
-
-    def __str__(self):
-        date = f"{self.get_date(DATEFORMAT)}\n"
-        if len(self.content) == 0:
-            return date + 'Empty'
-        return date + '\n'.join(map(str, self.content))
-
-    def __contains__(self, item):
-        """ word or its def """
-        assert isinstance(item, (str, Word)), \
-            f"Wrong item: '{type(item)}', func – WordsPerDay.__contains__"
-
-        return any(item in i for i in self.content)
-
-    def __getitem__(self, item):
-        """
-        :param item: word or index or slice
-        :return: object Word or WordsPerDay item in case of slice
-        """
-        if isinstance(item, (str, Word)) and item in self:
-            return list(filter(lambda x: item in x, self.content))
-        if isinstance(item, int) and abs(item) <= len(self.content):
-            return self.content[item]
-        if isinstance(item, slice):
-            return self.__class__(self.content[item], self.date)
-
-        raise IndexError(f"Wrong index or item {item} does not exist in {self.get_date(DATEFORMAT)}")
-
-    def __iter__(self):
-        return iter(self.content)
-
-    def __lt__(self, other):
-        if isinstance(other, WordsPerDay):
-            return len(self.content) < len(other.content)
-        if isinstance(other, int):
-            return len(self.content) < other
-
-    def __eq__(self, other):
-        if isinstance(other, WordsPerDay):
-            return len(self.content) == len(other.content)
-        if isinstance(other, int):
-            return len(self.content) == other
-
-    def __gt__(self, other):
-        return not self < other and not self == other
-
-    def __hash__(self):
-        return hash(
-            hash(tuple(self.content)) +
-            hash(self.date))
+        res = f"Word: {self.word}\n" \
+              f"Properties: {self.properties}\n" \
+              f"English: {self.english}\n" \
+              f"Russian: {self.russian}"
+        return res
 
 
 class Vocabulary:
