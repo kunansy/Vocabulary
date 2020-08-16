@@ -1,200 +1,69 @@
+import asyncio
 import os
 import random as rand
-from datetime import (
-    date as DATE
-)
-from functools import reduce
-from itertools import groupby
+import sqlite3
+import datetime
+import functools
+import itertools
+from pathlib import Path
+from typing import List, Dict, Any
 
-from xlrd import open_workbook
-from src.backup.backup_setup import *
-from src.main.common_funcs import (
-    today, word_id, up_word, file_name,
-    is_russian, file_exist, str_to_date,
-    diff_words_id, first_rus_index, add_to_file_name
-)
-from src.main.constants import *
-from src.docs.create_doc import *
-from src.repeat.repeat_setup import repeat
-from src.trouble.trouble import Trouble
+# import asyncpg as asyncpg
+# from xlrd import open_workbook
 
-from src.examples.examples import *
+# import src.backup.setup as backup
+import src.docs.create_doc as create_doc
+import src.main.common_funcs as comm_func
 
-def init_vocabulary_from_file(f_name=VOC_PATH):
-    # TODO: Удалить после перехода к db
-    assert file_exist(f_name), \
-        f"Wrong file: '{f_name}', func – init_vocabulary_from_file"
-
-    with open(f_name, 'r', encoding='utf-8') as file:
-        _content = file.readlines()
-        _dates = map(lambda x: str_to_date(x).strftime(DATEFORMAT),
-                     filter(lambda x: x.startswith('[') and '/' not in x, _content))
-
-        _begin = lambda elem: _content.index(f"[{elem}]\n")
-        _end = lambda elem: _content.index(f"[/{elem}]\n")
-
-        words_per_day = [WordsPerDay(map(Word, _content[_begin(i) + 1: _end(i)]), i)
-                         for i in _dates]
-    return words_per_day
+import src.main.constants as const
 
 
-def parse_str(string: str):
-    """ Разбирает строку на: термин, транксрицпию,
-        свойства, английское определение, русское
-    """
-    # TODO: Удалить после перехода к db
-    word_properties, other = string.split(' – ')
-
-    if '[' in word_properties:
-        prop_begin = word_properties.index('[')
-        word, properties = word_properties[:prop_begin], Properties(word_properties[prop_begin:])
-    else:
-        word = word_properties
-        properties = Properties('')
-
-    if word.count("|") == 2:
-        trans_begin = word.index("|")
-        word, transcription = word[:trans_begin], word[trans_begin:]
-
-    else:
-        transcription = ''
-
-    if other:
-        if is_russian(other):
-            fri = first_rus_index(other)
-            original = other[:fri].split(';')
-            native = other[fri:].split(';')
-        else:
-            original = other.split(';')
-            native = []
-    else:
-        original = []
-        native = []
-
-    if any(word.lower() in i.split() for i in original):
-        print(f"'{word.capitalize()}' is situated in the definition too. It is recommended to replace it on ***")
-
-    if any('.' in i for i in original):
-        print(f"There is wrong symbol '.' in the definition of the word '{word}'")
-
-    return word, transcription, properties, original, native
-
-
-def init_from_xlsx(f_name, out='tmp',
-                   date=None):
-    """ Преобразовать xlsx файл в список объектов класса Word,
-        вывести их в файл с дополнением старого содержимого
-    """
-    # TODO: Редактировать после перехода к db
-    assert file_exist(f_name), \
-        f"File: '{f_name}' does not exist, func – init_from_xlsx"
-
-    if not file_exist(out):
-        with open(out, 'w'): pass
-
-    if date is None:
-        date = today()
-    else:
-        date = str_to_date(date).strftime(DATEFORMAT)
-
-    assert f"[{date}]\n" not in open(out, 'r', encoding='utf-8').readlines(), \
-        f"Date '{date}' currently exists in the '{out}' file, func – init_from_xlsx"
-
-    rb = open_workbook(f_name)
-    sheet = rb.sheet_by_index(0)
-
-    # удаляется заглавие, введение и прочие некорректные данные
-    content = list(filter(lambda x: len(x[0]) and (len(x[2]) or len(x[3])),
-                          [sheet.row_values(i) for i in range(sheet.nrows)]))
-    content.sort(key=lambda x: x[0])
-
-    # группировка одинаковых слов вместе
-    content = groupby(map(lambda x: Word(word=x[0], original_def=x[2], native_def=x[3]), content),
-                      key=lambda x: (x.word, x.properties))
-
-    # суммирование одинаковых слов в один объект класса Word
-    result = [reduce(lambda res, elem: res + elem, list(group[1]), Word('')) for group in content]
-
-    with open(out, 'a', encoding='utf-8') as f:
-        f.write(f"\n\n[{date}]\n")
-        f.write('\n'.join(map(str, result)))
-        f.write(f"\n[/{date}]\n")
-
-
-def search_by_attribute(_sample: list, _item: str) -> str:
-    """ Ищет в выборке объект класса Word, один из
-        атрибутов которого соответствует искомому айтему
-    """
-    _trbl = Trouble(search_by_attribute, 'sth')
-    assert isinstance(_sample, list) and _sample, \
-        _trbl(_trbl=f"Wrong words_list: '{_sample}'")
-    assert all(isinstance(i, Word) for i in _sample), \
-        _trbl(_trbl="Wrong type samples items")
-    assert isinstance(_item, str) and _item, \
-        _trbl(_trbl=f"Wrong item: '{_item}'", _exp='str')
-
-    _item = _item.lower().strip()
-    # Если в переданном айтеме есть русский символ – соответствие
-    # может быть только с русским определением
-    if is_russian(_item):
-        try:
-            r_defs = map(lambda x: x.get_native(True).lower(), _sample)
-            return list(filter(lambda x: x == _item, r_defs))[0]
-        except:
-            print(f"Word, attributes fit with: '{_item}' in the sample: '{_sample}', not found")
-            return ''
-
-    # Поиск соответствия в самих словах
-    in_word = list(filter(lambda x: x.word == _item, _sample))
-    try:
-        if len(in_word):
-            return in_word[0]
-        orig_defs = map(lambda x: x.get_original(True).lower(), _sample)
-        return list(filter(lambda x: x == _item, orig_defs))[0]
-    except:
-        print(f"Word, attributes fit with: '{_item}' in the sample: '{_sample}', not found")
-        return ''
-
-
-class Properties:
-    __slots__ = ['properties']
-
-    def __init__(self, properties):
-        assert isinstance(properties, (str, list)), \
-            f"Wrong properties: '{properties}', func – Properties.__init__"
-
-        if isinstance(properties, str):
-            properties = properties.replace('[', '').replace(']', '').split(',')
-        properties = list(filter(len, map(lambda x: x.strip().lower(), properties)))
-
-        self.properties = properties[:]
-
-    def __eq__(self, other):
-        if isinstance(other, Properties):
-            return sorted(self.properties) == sorted(other.properties)
-        return other.lower() in self.properties
-
-    def __ne__(self, other):
-        return not (self == other)
-
-    def __getitem__(self, item):
-        return self == item
-
-    def __getattr__(self, item):
-        return self == item
-
-    def __len__(self):
-        return len(self.properties)
-
-    def __add__(self, other):
-        if isinstance(other, Properties):
-            return Properties(self.properties + other.properties)
-
-    def __hash__(self):
-        return hash(tuple(self.properties))
-
-    def __str__(self):
-        return f"[{', '.join(map(str.capitalize, self.properties))}]"
+# def init_from_xlsx(f_name: Path,
+#                    out: Path = 'tmp',
+#                    date=None):
+#     """ Преобразовать xlsx файл в список объектов класса Word,
+#         вывести их в файл с дополнением старого содержимого
+#     """
+#     # TODO: Редактировать после перехода к db
+#     assert f_name.exists(), \
+#         f"File: '{f_name}' does not exist, func – init_from_xlsx"
+#
+#     if not out.exists():
+#         with out.open('w'):
+#             pass
+#
+#     if date is None:
+#         date = datetime.date.today()
+#     else:
+#         date = comm_func.str_to_date(date).strftime(const.DATEFORMAT)
+#
+#     assert f"[{date}]\n" not in out.open('r', encoding='utf-8').readlines(), \
+#         f"Date '{date}' currently exists in the '{out}' file, func – init_from_xlsx"
+#
+#     rb = open_workbook(str(f_name))
+#     sheet = rb.sheet_by_index(0)
+#
+#     # удаляется заглавие, введение и прочие некорректные данные
+#     content = list(filter(lambda x: len(x[0]) and (len(x[2]) or len(x[3])),
+#                           [sheet.row_values(i) for i in range(sheet.nrows)]))
+#     content.sort(key=lambda x: x[0])
+#
+#     # группировка одинаковых слов вместе
+#     content = itertools.groupby(
+#         map(lambda x: Word(x[0], x[2], x[3]), content),
+#         key=lambda x: (x._word, x.properties)
+#     )
+#
+#     # суммирование одинаковых слов в один объект класса Word
+#     result = [
+#         functools.reduce(lambda res, elem: res + elem, list(group[1]), Word(''))
+#         for group in content
+#     ]
+#
+#     with out.open('a', encoding='utf-8') as f:
+#         f.write(f"\n\n[{date}]\n")
+#         f.write('\n'.join(map(str, result)))
+#         f.write(f"\n[/{date}]\n")
 
 
 class Word:
@@ -441,43 +310,50 @@ class Word:
 
 
 class Vocabulary:
-    __slots__ = ['list_of_days', 'graphic_name']
+    __slots__ = '_data', 'graphic_name', '_cursor'
 
-    def __init__(self, f_name=VOC_PATH):
-        assert file_exist(f_name), \
-            f"Wrong file: {f_name}, func – Vocabulary.__init__"
-        self.list_of_days = init_vocabulary_from_file(f_name)[:]
+    def __init__(self,
+                 db_path: Path) -> None:
+        if not db_path.exists():
+            raise FileNotFoundError
+        self._data = []
+        data = sqlite3.connect(db_path)
+        self._cursor = data.cursor()
 
         # имя файла с графиком динамики изучения
-        self.graphic_name = f"{TABLE_FOLDER}\\Information_{self.get_date_range()}.xlsx"
+        self.graphic_name = const.TABLE_FOLDER / f"info_{self.get_date_range()}.xlsx"
 
-    def dynamic(self, df=None):
+    @property
+    def data(self) -> List[Word]:
+        return self._data
+
+    def dynamic(self,
+                df: str = None) -> Dict[datetime.date, int]:
         """ Вернуть пары из непустых дней:
             дата – количество изученных слов
         """
-        return {i.get_date(df): len(i) for i in self.list_of_days}
+        # df = df or const.DATEFORMAT
+        # TODO
 
     def max_day_info(self):
         """ Информация о дне с max количеством
             слов: дата и само количество
         """
-        max_day = max(self.list_of_days)
-        return f"Maximum day {max_day.get_date(DATEFORMAT)}: {len(max_day)}"
+        # TODO
 
     def min_day_info(self):
         """ Информация о дне с min количеством
             слов: дата и само количество
         """
-        min_day = min(self.list_of_days)
-        return f"Minimum day {min_day.get_date(DATEFORMAT)}: {len(min_day)}"
+        # TODO
 
     def avg_count_of_words(self):
         """ Среднее количество изученных за день слов """
-        return sum(len(i) for i in self.list_of_days) // self.duration()
+        # TODO
 
     def empty_days_count(self):
         """ Количество пустых дней """
-        return self.duration() - len(self.list_of_days)
+        # TODO
 
     def statistics(self):
         """ Статистика о словаре:
@@ -486,46 +362,48 @@ class Vocabulary:
             количества пустых дней на среднее количество изученных в день слов);
             min/max количества изученных слов
         """
-        avg_value = self.avg_count_of_words()
-        empty_count = self.empty_days_count()
-
-        avg_words_count = f"Average value = {avg_value}"
-        duration = f"Duration = {self.duration()}"
-        total_amount = f"Total = {len(self)}"
-        would_be_total = f"Would be total = {len(self) + avg_value * empty_count}\n" \
-                         f"Lost = {self.avg_count_of_words() * empty_count} items per " \
-                         f"{empty_count} empty days"
-        min_max = f"{self.max_day_info()}\n{self.min_day_info()}"
-
-        return f"{duration}\n{avg_words_count}\n{total_amount}\n{would_be_total}\n\n{min_max}"
+        # TODO
+        # avg_value = self.avg_count_of_words()
+        # empty_count = self.empty_days_count()
+        #
+        # avg_words_count = f"Average value = {avg_value}"
+        # duration = f"Duration = {self.duration()}"
+        # total_amount = f"Total = {len(self)}"
+        # would_be_total = f"Would be total = {len(self) + avg_value * empty_count}\n" \
+        #                  f"Lost = {self.avg_count_of_words() * empty_count} items per " \
+        #                  f"{empty_count} empty days"
+        # min_max = f"{self.max_day_info()}\n{self.min_day_info()}"
+        #
+        # return f"{duration}\n{avg_words_count}\n{total_amount}\n{would_be_total}\n\n{min_max}"
 
     def get_date_list(self):
         """ Список дат DATE-объектами """
-        return list(map(lambda x: x.get_date(), self.list_of_days))
+        return list(map(lambda x: x.get_date(), self.data))
 
     def get_date_range(self):
         """ Дата первого дня-дата последнего дня """
-        return f"{self.begin().strftime(DATEFORMAT)}-" \
-               f"{self.end().strftime(DATEFORMAT)}"
+        begin = self.begin().strftime(const.DATEFORMAT)
+        end = self.end().strftime(const.DATEFORMAT)
+        return f"{begin}-{end}"
 
-    def get_item_before_now(self, days_count: int):
+    def get_item_before_now(self,
+                            days_count: int):
         """ Вернуть непустой день, чей индекс = len - days_count """
-        assert isinstance(days_count, int) and days_count >= 0, \
-            f"Wrong days_count: '{days_count}', func – Vocabulary.get_item_before_now"
+        index = len(self.data) - days_count - 1
 
-        index = len(self.list_of_days) - days_count - 1
+        if index < 0:
+            raise ValueError(f"Wrong index: '{index}'")
 
-        assert index >= 0, \
-            f"Wrong index: '{index}', func – Vocabulary.get_item_before_now"
-
-        return self.list_of_days[index]
+        return self.data[index]
 
     def common_words_list(self):
         """ Вернуть отсортированный список всех слов """
-        return list(sorted(reduce(
+        all_words = functools.reduce(
             lambda result, element: result + element.get_content(),
-            self.list_of_days,
-            [])))
+            self.data,
+            [])
+        all_words.sort()
+        return all_words
 
     def duration(self):
         """ Продолжительность ведения словаря """
@@ -534,61 +412,57 @@ class Vocabulary:
     def visual_info(self):
         kwargs = {
             'x_axis_name': 'Days',
-            'y_axis_name': 'Count',
+            'y_axis_name': 'Amount of words',
             'chart_title': 'Words learning dynamic'
         }
-        date_count = self.dynamic(DATEFORMAT)
-        visual_info(self.graphic_name, date_count, **kwargs)
+        date_count = self.dynamic()
+        create_doc.visual_info(self.graphic_name, date_count, **kwargs)
 
     def create_docx(self):
         """ Создать docx-файл со всемии словами словаря,
             отсортированными по алфавиту; Имя файла –
             date_range текущего словаря;
         """
-        create_docx(_content=self.common_words_list(),
-                    f_name=self.get_date_range(),
-                    _header=self.get_date_range())
+        filename = header = self.get_date_range()
+        create_doc.create_docx(
+            filename,
+            self.common_words_list(),
+            header
+        )
 
     def create_pdf(self):
         """ Создать pdf-файл со всемии словами словаря,
             отсортированными по алфавиту; Имя файла –
             date_range текущего словаря;
         """
-        create_pdf(_content=self.common_words_list(),
-                   f_name=self.get_date_range())
+        create_doc.create_pdf(
+            self.get_date_range(),
+            self.common_words_list()
+        )
 
-    def search(self, item):
+    def search(self,
+               item: Any):
+        #  -> Dict[datetime.date, List[Word]]
         """ Вернуть словарь из даты изучения в ключе и
             найденными словами из этого дня в значениях
         """
-        # TODO: написать комментарий к принципу поиска, иправить его
-        assert isinstance(item, (str, Word)), \
-            f"Wrong item: '{item}', func – Vocabulary.search"
-        assert len(item) > 1, \
-            f"Wrong item: '{item}', func – Vocabulary.search"
-        assert item in self, \
-            f"Word is not in the Vocabulary '{item}', func – Vocabulary.search"
+        if not isinstance(item, (str, Word)):
+            raise TypeError(f"Wrong item: '{item}'")
 
-        item = item.lower().strip()
-
-        return {i.get_date(DATEFORMAT): i[item] for i in filter(lambda x: item in x, self.list_of_days)}
+        if item not in self:
+            raise ValueError(f"'{item}' not found")
 
     def show_graph(self):
         """ Показать график, создав его в случае отсутствия """
-        if not file_exist(self.graphic_name):
-            self.visual_info()
+        if not self.graphic_name.exists():
+            raise FileExistsError(f"{self.graphic_name} doesn't exist")
 
         os.system(self.graphic_name)
 
     def info(self):
         """ Создать xlsx файл с графиком изучения слов, вернуть информацию о словаре:
             пары: день – количество изученных слов; статистика """
-        self.visual_info()
-        dynamic = [f"{date}: {count}" for date, count in
-                   self.dynamic(DATEFORMAT).items()]
-        dynamic = '\n'.join(dynamic)
-
-        return dynamic + f"\n{DIVIDER}\n" + self.statistics()
+        # TODO
 
     def repeat(self, *items_to_repeat, **params):
         """ Запуск повторения уникальных слов при указанном mode;
@@ -598,207 +472,104 @@ class Vocabulary:
                 3. random=n: один либо n случайных дней;
                 4. most_difficult=n: n либо все слова из лога повторений
         """
-        _rand = params.pop('rand', 0)
-        most_difficult = params.pop('most_difficult', 0)
-        repeating_days = []
-        if _rand:
-            repeating_days += rand.sample(self.list_of_days, _rand)
-        if most_difficult:
-            repeating_days += [WordsPerDay(self.search_by_id(*diff_words_id()[:most_difficult]), today())]
-        if items_to_repeat:
-            days_before_now = filter(lambda x: isinstance(x, int), items_to_repeat)
-            dates = filter(lambda x: isinstance(x, (str, DATE)), items_to_repeat)
-
-            days_before_now = list(map(self.get_item_before_now, days_before_now))
-            dates = list(map(self.__getitem__, dates))
-
-            repeating_days += dates + days_before_now
-
-        assert len(repeating_days) != 0, \
-            f"Wrong item to repeat, func – Vocabulary.repeat"
-
-        repeating_days.sort(key=lambda x: x.get_date())
-
-        if len(repeating_days) > 1 and repeating_days[0].get_date() != repeating_days[-1].get_date():
-            window_title = f"{repeating_days[0].get_date()}-{repeating_days[-1].get_date()}, {len(repeating_days)} days"
-        else:
-            window_title = repeating_days[0].get_date(DATEFORMAT)
-
-        # Переданные айтемы могут содержать одинаковые слова
-        repeating_days = sum(list(map(WordsPerDay.get_content, repeating_days)), [])
-        repeating_days = list(set(tuple(repeating_days)))
-
-        repeat(repeating_days, window_title, **params)
+        pass
 
     def begin(self):
         """ Вернуть дату первого дня DATE-объектом """
-        return self.list_of_days[0].get_date()
+        pass
 
     def end(self):
         """ Вернуть дату последнего дня DATE-объектом """
-        return self.list_of_days[-1].get_date()
+        pass
 
     def search_by_properties(self, *properties):
         """ Найти слова, удовлетворяющие переданным свойствам """
-        # TODO: будет ли работать при sth.search_by_properties([prop1, prop2...])?
-        return list(filter(lambda x: x.is_fit(*properties), self.common_words_list()))
+        pass
 
-    def search_by_id(self, *ids):
-        """ Вернуть список слов, чьи ID равны ID переданным """
-        if isinstance(ids[0], list):
-            ids = sum(ids, [])
-
-        assert all(isinstance(i, str) and len(i) == ID_LENGTH for i in ids), \
-            f"Wrong ids: '{ids}', func – Vocabulary.search_by_id"
-
-        # TODO: сортировать в соответствии с порядком id
-        # id_to_word = list(map(lambda x: (x.get_id(), x), self.common_words_list()))
-        # print(len(id_to_word))
-        # print(list(filter(lambda x: )))
-
-        # return list(filter(lambda x: x[0] in ids, id_to_word))
+    # def search_by_id(self, *ids):
+    #     """ Вернуть список слов, чьи ID равны ID переданным """
+    #     if isinstance(ids[0], list):
+    #         ids = sum(ids, [])
+    #
+    #     assert all(isinstance(i, str) and len(i) == ID_LENGTH for i in ids), \
+    #         f"Wrong ids: '{ids}', func – Vocabulary.search_by_id"
+    #
+    #     # TODO: сортировать в соответствии с порядком id
+    #     # id_to_word = list(map(lambda x: (x.get_id(), x), self.common_words_list()))
+    #     # print(len(id_to_word))
+    #     # print(list(filter(lambda x: )))
+    #
+    #     # return list(filter(lambda x: x[0] in ids, id_to_word))
 
     def how_to_say_in_native(self):
         """ Вернуть только слова на изучаемом языке """
-        return list(map(lambda x: x.word, self.common_words_list()))
+        pass
 
     def how_to_say_in_original(self):
         """ Вернуть только нативные определения слов """
-        return reduce(lambda res, elem: res + elem.native_only(def_only=True),
-                      self.list_of_days, [])
+        pass
 
     def backup(self):
         """ Backup главного словаря """
-        f_name = file_name(VOC_PATH)
         # добавить в имя файла текущий объём
-        f_name = add_to_file_name(f_name, f"_{len(self)}")
-        print("Main data backupping...")
-        backup(f_name, VOC_PATH)
+        pass
 
     def __contains__(self, item):
-        """ Есть ли слово (str или Word) или WordsPerDay
-            с такой датой (только DATE) в словаре
-        """
+        """ Есть ли слово (str или Word) в словаре """
         if isinstance(item, str):
-            return any(item.lower().strip() in i for i in self.list_of_days)
+            return any(item.lower().strip() in i for i in self.data)
         if isinstance(item, Word):
-            return any(item in i for i in self.list_of_days)
-        if isinstance(item, DATE):
-            if not any(i.date == item for i in self.list_of_days):
-                # если нет равенства даты – проверка на вхождение даты в промежуток
-                # [начало словаря; конец], и если дата попала в промежуток, то это
-                # означает, что день с такой датой есть в словаре, но он пуст
-                if self.begin() <= item <= self.end():
-                    return True
-                return False
-            return True
+            return any(item in i for i in self.data)
 
     def __len__(self):
         """ Вернуть общее количество слов в словаре """
-        return sum(len(i) for i in self.list_of_days)
+        pass
 
-    def __getitem__(self, _item):
-        """ Вернуть WordsPerDay элемент с датой, равной item
-            Если день с датой пуст – вернуть пустой WordsPerDay-объект
+    def __getitem__(self,
+                    date: datetime.date) -> List[Word]:
+        """ Get list of the words learned at the date.
 
-            :param _item: дата строкой, DATE-объектом или срезом
+
+        :param date: date or slice.
         """
-        _trbl = Trouble(Vocabulary.__getitem__)
-        assert isinstance(_item, (DATE, str, slice)), \
-            _trbl(_item, "str or slice", _p='w_item')
+        pass
 
-        # TODO: it could be some troubles after empty days removing
-        if isinstance(_item, slice):
-            start = str_to_date(_item.start) if _item.start is not None else _item.start
-            stop = str_to_date(_item.stop) if _item.stop is not None else _item.stop
+    def __call__(self,
+                 item: str or Word) -> List[Word]:
+        """ Get all found words.
 
-            if start is not None and stop is not None and start > stop:
-                raise ValueError(f"Start '{start}' cannot be more than stop '{stop}'")
-            if start is not None and (start < self.begin() or start > self.end()):
-                raise ValueError(f"Wrong start: '{start}'")
-            if stop is not None and (stop > self.end() or stop < self.begin()):
-                raise ValueError(f"Wrong stop: '{stop}'")
-
-            begin = start if start is None else list(map(lambda x: x.get_date() == start, self.list_of_days)).index(True)
-            end = stop if stop is None else list(map(lambda x: x.get_date() == stop, self.list_of_days)).index(True)
-            # TODO: нет инита по списку
-            # res = self.__class__()
-            # res.list_of_days = self.list_of_days[begin:end]
-            # return res
-
-        item = str_to_date(_item)
-
-        assert item in self, \
-            f"Wrong date: '{item}' func – Vocabulary.__getitem__"
-        # дата в словаре, но её нет в списке дат – день пуст
-        if item not in self.get_date_list():
-            return WordsPerDay([], item)
-
-        return list(filter(lambda x: item == x.get_date(), self.list_of_days))[0]
-
-    def __call__(self, _item, **kwargs):
-        """ Вернуть все найденные слова строкой;
-            Параметры поиска:
-                1. by_def – искать в определениях; если в искомом элементе есть хоть
-                    один русский символ – также искать в определениях;
+        :param item: word yto find.
+        :return: list of words.
         """
-        assert isinstance(_item, (str, Word)) and len(_item) > 1, \
-            Trouble(Vocabulary.__call__, _item, 'str or Word',_p='w_item')
-
-        word = _item.lower().strip()
-        by_def = kwargs.pop('by_def', False)
-        word = f" – " * by_def + word
-
-        try:
-            res = [f"{date}: {S_TAB.join(map(lambda x: up_word(str(x), word), words))}"
-                   for date, words in self.search(word).items()]
-            return '\n'.join(res)
-        except Exception as _err:
-            return f"Word '{word}' not found, {_err}"
+        pass
 
     def __str__(self):
         """ Вернуть все дни и информацию о словаре """
-        return f"{self.info()}\n{DIVIDER}\n" + \
-               f"\n{DIVIDER}\n\n".join(map(str, self.list_of_days))
+        pass
 
     def __bool__(self):
         """ Стандартный списочный """
-        return bool(self.list_of_days)
+        return bool(self.data)
 
     def __iter__(self):
         """ Стандартный списочный """
-        return iter(self.list_of_days)
+        return iter(self.data)
 
     def __hash__(self):
-        return hash(sum(hash(i) for i in self.list_of_days))
-
-
-def backup_everything(*backupping_bases):
-    """ Backup everything, supporting
-        backup() method
-    """
-    assert all(hasattr(i, 'backup') for i in backupping_bases)
-
-    for i in backupping_bases:
-        i.backup()
-        print()
-    print("Backup completed")
+        return hash(self.data)
 
 
 if __name__ == "__main__":
-    try:
-        # init_from_xlsx('1_16_2020.xlsx')
-        # dictionary = Vocabulary()
-        # print(dictionary)
-        # s_exams = SelfExamples()
-        c_exams = ParallelCorpusExamples('Worth', 10)
-        print(c_exams)
-        # backup_everything(dictionary, s_exams, c_exams)
-        pass
-    except Exception as trouble:
-        print(trouble)
+    # bd_path = Path(f"D:\\Python\\Projects\\Vocabulary\\data\\user_data\\Vocabulary.db")
+    # print(RESTORE_FOLDER_PATH)
+    # backup("eng_vocabulary.db", bd_path)
+    pass
+    # list_items(10)
+    # print(path)
 
-# TODO: в поля классов добавить _ в начало имени
+    # with sqlite3.connect(bd_path) as bd:
+    #     pass
+
 
 # TODO: как сказать по-английски?
 #  как сказать по-русски?

@@ -25,9 +25,9 @@ FOLDER_MTYPE = 'application/vnd.google-apps.folder'
 # If modifying these scopes, delete the file token.pickle
 SCOPES = ['https://www.googleapis.com/auth/drive']
 # path to token for the Drive
-TOKEN_PATH = const.PROGRAM_DATA_BASE_PATH / 'token.pickle'
+TOKEN_PATH = const.PROGRAM_DATA_PATH / 'token.pickle'
 # path to credentials to log in to Drive
-CREDS_PATH = const.PROGRAM_DATA_BASE_PATH / 'client_secret.json'
+CREDS_PATH = const.PROGRAM_DATA_PATH / 'client_secret.json'
 
 
 class Auth:

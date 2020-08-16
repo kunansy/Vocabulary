@@ -108,9 +108,9 @@ class RepeatWords(QMainWindow):
 
         if self.mode == 1:
             self.init_button = lambda x: x.get_native(def_only=True).capitalize()
-            self.main_item = lambda: self.word.word.capitalize()
+            self.main_item = lambda: self.word._word.capitalize()
         elif self.mode == 2:
-            self.init_button = lambda x: x.word.capitalize()
+            self.init_button = lambda x: x._word.capitalize()
             self.main_item = lambda: self.word.get_native(def_only=True).capitalize()
         elif self.mode == 3:
             self.init_button = lambda x: x.get_native(def_only=True).capitalize()
@@ -178,7 +178,7 @@ class RepeatWords(QMainWindow):
 
             self.test() if len(self.words) > 0 else self.close()
         else:
-            self.log(_w_choice=self.sender().text(), _item=self.word.word)
+            self.log(_w_choice=self.sender().text(), _item=self.word._word)
             self.show_result(_result='<b>Wrong</b>', _style="color: 'red';")
 
     def hint(self) -> None:
@@ -186,7 +186,7 @@ class RepeatWords(QMainWindow):
         if self.mode != 1:
             return
 
-        self.ExamplesWindow.display(word=self.word.word,
+        self.ExamplesWindow.display(word=self.word._word,
                                     message=f"{self.HintButton.text()}",
                                     style="color: blue")
 
