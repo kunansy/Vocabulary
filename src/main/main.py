@@ -5,8 +5,9 @@ from collections import Counter
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 
+import src.docs.create_doc as create_doc
 import src.main.common_funcs as comm_funcs
-import src.main.constants as const
+import src.main.constants as consts
 
 
 # def init_from_xlsx(f_name: Path,
@@ -66,27 +67,25 @@ class Word:
                  word: str = '',
                  date: datetime.date or str = None,
                  properties: set or str = None,
-                 english_defs: List[str] = None,
-                 russian_defs: List[str] = None) -> None:
+                 english: List[str] = None,
+                 russian: List[str] = None) -> None:
         """
         :param word: str, word to learn.
         :param properties: set or str, language level, formal, ancient etc.
         :param date: datetime.date, in the date word has been learned.
-        :param english_defs: list of str, English definitions of the word.
-        :param russian_defs: list of str, Russian definitions of the word.
+        :param english: list of str, English definitions of the word.
+        :param russian: list of str, Russian definitions of the word.
         """
         self._word = comm_funcs.fmt_str(word)
         self._id = comm_funcs.word_id(self._word)
 
-        english_defs = english_defs or []
-        russian_defs = russian_defs or []
-        english_defs = (english_defs.split('; ') if
-                        isinstance(english_defs, str) else english_defs)
-        russian_defs = (russian_defs.split('; ') if
-                        isinstance(russian_defs, str) else russian_defs)
+        english = english or []
+        russian = russian or []
+        self._english_defs = (
+            english.split('; ') if isinstance(english, str) else english)
+        self._russian_defs = (
+            russian.split('; ') if isinstance(russian, str) else russian)
 
-        self._english_defs = english_defs
-        self._russian_defs = russian_defs
         self._date = (comm_funcs.str_to_date(date) or
                       datetime.datetime.now().date())
 
@@ -321,11 +320,21 @@ class Vocabulary:
     __slots__ = '_data', 'graphic_name', '_cursor', '_db'
     _TABLE_NAME = 'Vocabulary'
     _RESTRICT_SHOW = 50
+    _TEMPLATE_TO_WORD = "SELECT word, date, properties, " \
+                        "English, Russian from {table} "
 
     def __init__(self,
                  db_path: Path) -> None:
+        """" Create a connection to database, cursor,
+        load Words from there.
+
+        :param db_path: Path to the database.
+        :return: None.
+        :exception FileNotFoundError: if the database file doesn't exist.
+        :exception sqlite3.Error: if something went wrong while connecting to db.
+        """
         if not db_path.exists():
-            raise FileNotFoundError
+            raise FileNotFoundError("DB file doesn't exist")
         
         try:
             self._db = sqlite3.connect(db_path)
@@ -337,35 +346,43 @@ class Vocabulary:
         self._data = self._load()
 
         # filename with dynamics of learning
-        self.graphic_name = const.TABLE_FOLDER / f"info_{self.get_date_range()}.xlsx"
+        self.graphic_name = (consts.TABLE_FOLDER /
+                             f"info_{self.get_date_span()}.xlsx")
 
     @classmethod
     def set_restrict_show(cls,
                           new_value: int or bool) -> None:
         """ Change the amount of shown in print words.
-        If this value is False, all words'll be shown.
+        If this value is False, all words will be shown.
 
-        :param new_value: int or bool, amount of shown in print words.
+        :param new_value: int or bool, amount of words shown in print.
         :return: None.
         """
         cls._RESTRICT_SHOW = new_value
 
     def _load(self) -> List[Word]:
+        """
+        :return: list of Words loaded from the database.
+        """
         data = self._cursor.execute(
-            f""" SELECT word, date, properties, English, Russian from {self._TABLE_NAME} """
+            self._TEMPLATE_TO_WORD.format(table=self._TABLE_NAME)
         )
-        return [
-            Word(*fields)
-            for fields in data.fetchall()
-        ]
+        words = map(
+            lambda fields: Word(*fields),
+            data.fetchall()
+        )
+        return list(words)
 
     @property
     def data(self) -> List[Word]:
+        """
+        :return: list of Words, data.
+        """
         return self._data
 
     @property
     def begin(self) -> datetime.date:
-        """ Get the first day.
+        """ Get the date of the first day.
 
         :return: datetime.date, first date.
         """
@@ -376,7 +393,7 @@ class Vocabulary:
 
     @property
     def end(self) -> datetime.date:
-        """ Get the last day.
+        """ Get the date of the last day.
 
         :return: datetime.date, last date.
         """
@@ -385,9 +402,16 @@ class Vocabulary:
         ).fetchone()
         return comm_funcs.str_to_date(last_date[0])
 
+    @property
+    def duration(self) -> int:
+        """
+        :return: int, duration of the Vocabulary using.
+        """
+        return (self.end - self.begin).days + 1
+
     def dynamic(self) -> Dict[datetime.date, int]:
         """
-        :return: dict of datetime.date and str, pairs:
+        :return: dict of datetime.date and int, pairs:
         date – amount of learned words in this date.
         """
         dates = self.get_date_list()
@@ -398,8 +422,8 @@ class Vocabulary:
 
         :return: tuple of datetime.date and int.
         """
-        max_day = max(self.dynamic().items(), key=lambda x: x[1])
-        return tuple(max_day)
+        date, amount = max(self.dynamic().items(), key=lambda x: x[1])
+        return date.strftime(consts.DATEFORMAT), amount
 
     def min_day_info(self) -> Tuple[datetime.date, int]:
         """ Get info about the day with max words count.
@@ -410,124 +434,145 @@ class Vocabulary:
         return tuple(min_day)
 
     def avg_count_of_words(self) -> float:
-        """ Average count of learned per day words.
-
-        :return: float, this value.
+        """
+        :return: float, average amount of words learned per one day.
         """
         count_of_words = self.dynamic().values()
+        print(sum(count_of_words))
+        print(len(count_of_words))
         return sum(count_of_words) / len(count_of_words)
 
     def empty_days_count(self) -> int:
         """
-        :return: int, amount of empty days.
+        :return: int, amount of days, the user doing nothing.
         """
-        pass
+        return (self.end - self.begin).days + 1 - len(self.get_date_list())
 
     def statistics(self) -> str:
-        """ Статистика о словаре:
-            продолжительность; среднее количество слов; всего слов изучено;
-            могло бы быть изучно, но эти дни пустые (считается умножением
-            количества пустых дней на среднее количество изученных в день слов);
-            min/max количества изученных слов
+        """ Statistics about Vocabulary, str format:
+            Duration: ...
+            Average amount of learned words: ...
+            Empty days: ...
+            Total: ...
+            Would be total: ...
+            Max day: ...
+            Min day: ...
+
+        Would be total = amount of empty days *
+            average amount of words learned per one day
+
+        :return: this str.
         """
-        # TODO
-        # avg_value = self.avg_count_of_words()
-        # empty_count = self.empty_days_count()
-        #
-        # avg_words_count = f"Average value = {avg_value}"
-        # duration = f"Duration = {self.duration()}"
-        # total_amount = f"Total = {len(self)}"
-        # would_be_total = f"Would be total = {len(self) + avg_value * empty_count}\n" \
-        #                  f"Lost = {self.avg_count_of_words() * empty_count} items per " \
-        #                  f"{empty_count} empty days"
-        # min_max = f"{self.max_day_info()}\n{self.min_day_info()}"
-        #
-        # return f"{duration}\n{avg_words_count}\n{total_amount}\n{would_be_total}\n\n{min_max}"
+        avg_per_day = self.avg_count_of_words()
+        empty_days = self.empty_days_count()
+        total = len(self)
+        would_be_total = total + avg_per_day * empty_days
+
+        return f"Duration: {self.duration} days\n" \
+               f"Average amount of learned words: {avg_per_day}\n" \
+               f"Empty days: {empty_days}\n" \
+               f"Total: {total}\n" \
+               f"Would be total: {would_be_total}\n" \
+               f"Max day: {self.max_day_info()}\n" \
+               f"Min day: {self.max_day_info()}"
 
     def get_date_list(self) -> List[datetime.date]:
         """ Get all dates from the database.
 
         :return: list of datetime.date, all dates.
         """
-        return list(map(Word.date, self.data))
+        dates = self._cursor.execute(
+            f""" SELECT DISTINCT date FROM {self._TABLE_NAME} """
+        )
+        # print(*dates.fetchall(), sep='\n')
+        dates = map(
+            comm_funcs.str_to_date,
+            dates.fetchall()
+        )
+        return list(dates)
 
-    def get_date_range(self) -> str:
-        """ Dateformat is default.
-
+    def get_date_span(self,
+                      datefmt: str = consts.DATEFORMAT) -> str:
+        """
+        :param datefmt: str, date format.
         :return: str, date of the first day - date of the last day.
         """
-        begin = self.begin.strftime(const.DATEFORMAT)
-        end = self.end.strftime(const.DATEFORMAT)
+        begin = self.begin.strftime(datefmt)
+        end = self.end.strftime(datefmt)
         return f"{begin}-{end}"
 
     def get_item_before_now(self,
                             days_count: int) -> List[Word]:
-        """ Get words which have been learned on the date equals to
-        the last date - given days count - 1 """
-        pass
+        """ Get words which have been learned
+        before the last date for days_count days.
 
-    def common_words_list(self,
-                          reverse: bool = False) -> List[Word]:
+        :param days_count: int, index of day before the last.
+        :return: list of Words.
+        :exception ValueError: if the index < 0.
         """
-        :param reverse: bool, whether the sort'll be in reversed order.
-        :return: sorted by alphabet list of all words in the Vocabulary.
+        dates = self.get_date_list()
+        date_index = len(dates) - days_count - 1
+        if date_index < 0:
+            raise ValueError("Expected day doesn't exist")
+
+        expected_date = dates[date_index]
+        return self[expected_date]
+
+    def all_words(self,
+                  reverse: bool = False) -> List[Word]:
+        """
+        :param reverse: bool, whether the sort will be in reversed order.
+        :return: sorted by alphabet list of all words.
         """
         all_words = self.data[:]
         all_words.sort(reverse=reverse)
 
         return all_words
 
-    def duration(self) -> int:
-        """
-        :return: int, duration of the Vocabulary using.
-        """
-        return (self.end - self.begin).days + 1
+    def visual_info(self) -> None:
+        """ Create a xlsx file with dynamic of learning words.
 
-    # def visual_info(self):
-    #     kwargs = {
-    #         'x_axis_name': 'Days',
-    #         'y_axis_name': 'Amount of words',
-    #         'chart_title': 'Words learning dynamic'
-    #     }
-    #     date_count = self.dynamic()
-    #     create_doc.visual_info(self.graphic_name, date_count, **kwargs)
-    #
-    # def create_docx(self):
-    #     """ Создать docx-файл со всемии словами словаря,
-    #         отсортированными по алфавиту; Имя файла –
-    #         date_range текущего словаря;
-    #     """
-    #     filename = header = self.get_date_range()
-    #     create_doc.create_docx(
-    #         filename,
-    #         self.common_words_list(),
-    #         header
-    #     )
-    #
-    # def create_pdf(self):
-    #     """ Создать pdf-файл со всемии словами словаря,
-    #         отсортированными по алфавиту; Имя файла –
-    #         date_range текущего словаря;
-    #     """
-    #     create_doc.create_pdf(
-    #         self.get_date_range(),
-    #         self.common_words_list()
-    #     )
+        :return: None.
+        """
+        kwargs = {
+            'x_axis_name': 'Days',
+            'y_axis_name': 'Amount of words',
+            'chart_title': 'Words learning dynamic'
+        }
+        date_to_count = self.dynamic()
+        create_doc.visual_info(self.graphic_name, date_to_count, **kwargs)
+
+    def create_docx(self) -> None:
+        """ Create docx-file with all words, sorted by alphabet.
+
+        Filename – date_span().
+
+        :return: None.
+        """
+        filename = header = self.get_date_span()
+        create_doc.create_docx(filename, self.all_words(), header)
+
+    def create_pdf(self) -> None:
+        """ Create pdf-file with all words, sorted by alphabet.
+
+        Filename – date_span().
+
+        :return: None.
+        """
+        create_doc.create_pdf(self.get_date_span(), self.all_words())
 
     def search(self,
                item: str or Word) -> List[Word]:
-        """ Get all similar words, means the item is in the word or
-        the word is in the item.
+        """ Get all similar words, means the item is
+        in the word or the word is in the item.
 
         :param item: str or Word, word to find.
-        :return: list of similar to the item words.
+        :return: list of words similar to the item.
+        :exception TypeError: if wrong type given.
         """
         # TODO: check id's similarity
         if not isinstance(item, (str, Word)):
             raise TypeError(f"Wrong item: '{item}'")
-
-        if item not in self:
-            raise ValueError(f"'{item}' not found")
 
         if isinstance(item, Word):
             item = item.word
@@ -539,7 +584,7 @@ class Vocabulary:
         )
         return list(similar_words)
 
-    def show_graph(self) -> None:
+    def show_graphic(self) -> None:
         """ Show the graphic.
 
         :return: None.
@@ -567,8 +612,8 @@ class Vocabulary:
                      *ids: str) -> List[Word]:
         """ Find words by their ids.
 
-        :param ids: list of str, ids to find words.
-        :return: list of word, words which id is in the list.
+        :param ids: list of str.
+        :return: list of words, words which ids are in the list.
         """
         words_by_id = filter(
             lambda word: word.id in ids,
@@ -576,17 +621,14 @@ class Vocabulary:
         )
         return list(words_by_id)
 
-    def how_to_say_in_native(self) -> List[str]:
+    def how_to_say_in_russian(self) -> List[str]:
         """
         :return: list of str, only words.
         """
-        words = map(
-            lambda word: word.word,
-            self.data
-        )
+        words = map(Word.word, self.data)
         return list(words)
 
-    def how_to_say_in_english(self):
+    def how_to_say_in_english(self) -> List[str]:
         """
         :return: list of str, only English definitions of the words.
         """
@@ -596,26 +638,74 @@ class Vocabulary:
         )
         return list(english_definitions)
 
-    def backup(self):
-        """ Backup главного словаря """
-        # добавить в имя файла текущий объём
+    def backup(self) -> None:
+        """ Backup the database to Google Drive.
+
+        :return: None.
+        """
         pass
 
     def append(self,
                item: Word) -> None:
-        pass
+        """ Add a Word obj to the data list.
+
+        :param item: Word to add.
+        :return: None.
+        :exception TypeError: if wrong type given.
+        """
+        if not isinstance(item, Word):
+            raise TypeError(f"Word expected, but '{type(item)}' given")
+        self._data.append(item)
 
     def extend(self,
                items: List[Word]) -> None:
-        pass
+        """ Extend the data list by another list of them.
+
+        :param items: list of Words to add.
+        :return: None.
+        :exception TypeError: if wrong type give.
+        """
+        if (isinstance(items, list) and
+                all(isinstance(item, Word) for item in items)):
+            self._data.extend(items)
+        else:
+            raise TypeError(f"List of Words expected, but "
+                            f"'{type(items)}' of '{type(items)}' given")
 
     def __add__(self,
-                other: Word or List[Word]) -> Any:
-        pass
+                other: Word or List[Word]) -> List[Word]:
+        """ Concatenate the data list with the
+        given Word or list of Words.
+
+        :param other: Word or list of them.
+        :return: list of words, concatenated lists.
+        :exception TypeError: if wrong type give.
+        """
+        if isinstance(other, Word):
+            return self.data + [other]
+        elif (isinstance(other, list) and
+              all(isinstance(item, Word) for item in other)):
+            return self.data + other
+        else:
+            raise TypeError("Wrong type, Word or list of Words expected")
 
     def __iadd__(self,
                  other: Word or List[Word]) -> Any:
-        pass
+        """ Extend the data list by one word on list of them.
+
+        :param other: Word or list of them, word(s) to add.
+        :return: self.
+        :exception TypeError: if wrong type give.
+        """
+        if isinstance(other, Word):
+            self._data += [other]
+            return self
+        elif (isinstance(other, list) and
+              all(isinstance(item, Word) for item in other)):
+            self._data += other
+            return self
+        else:
+            raise TypeError("Wrong type, Word or list of Words expected")
 
     def __contains__(self,
                      item: str or Word) -> bool:
@@ -628,34 +718,35 @@ class Vocabulary:
 
         item = comm_funcs.fmt_str(item)
         words = self._cursor.execute(
-            f""" SELECT word FROM {self._TABLE_NAME} WHERE word LIKE '%{item}%' """
+            f""" SELECT word FROM {self._TABLE_NAME} 
+                  WHERE word LIKE '%{item}%' """
         )
         return bool(words.fetchone())
 
     def __len__(self) -> int:
         """
-        :return: int, amount of word in the data list.
+        :return: int, amount of learned words.
         """
         return len(self.data)
 
     def __getitem__(self,
                     item: datetime.date) -> List[Word]:
-        """ Get list of the words learned
-        on the date or between the dates.
+        """ Get the list of the words learned
+        on the date or between the dates: [start; stop].
 
-        :param item: date or slice, item to get words.
-        :return: list of words.
+        :param item: date or slice of dates.
+        :return: list of Words.
+        :exception TypeError: if the wrong type given.
+        :exception ValueError: if the start index > stop.
         """
         if not isinstance(item, (datetime.date, slice)):
-            raise TypeError(
-                f"Wrong item type: '{type(item)}', "
-                f"datetime.date or slice expected ")
+            raise TypeError(f"Wrong type: '{type(item)}', "
+                            f"datetime.date or slice expected")
 
         if isinstance(item, datetime.date):
-            date_range = self._cursor.execute(
-                f""" SELECT word, date, properties, English, Russian 
-                     FROM {self._TABLE_NAME} WHERE date = {item}
-                """
+            items_at_date = filter(
+                lambda word: word.date == item,
+                self.data
             )
         elif isinstance(item, slice):
             start = item.start or self.begin
@@ -665,27 +756,23 @@ class Vocabulary:
                 raise TypeError(
                     f"Slice for '{type(start)}', '{type(stop)}'"
                     f" not defined, datetime.date expected")
+            if start > stop:
+                raise ValueError("Start must be <= than stop")
 
-            date_range = self._cursor.execute(
-                f""" SELECT word, date, properties, English, Russian 
-                     FROM {self._TABLE_NAME} WHERE date BETWEEN 
-                     DATE('{start}') AND DATE('{stop}')
-                """
+            items_at_date = filter(
+                lambda word: start <= word.date <= stop,
+                self.data
             )
-
-        return [
-            Word(*fields)
-            for fields in date_range.fetchall()
-        ]
+        return list(items_at_date)
 
     def __call__(self,
                  item: str or Word) -> List[Word]:
-        """ Get all found words.
+        """ Find all found that are similar to the given one.
 
         All the same to search().
 
         :param item: str ot Word, word to find.
-        :return: list of words.
+        :return: list of found words.
         """
         return self.search(item)
 
@@ -693,8 +780,19 @@ class Vocabulary:
         """
         :return: str, info about the Vocabulary and some words.
         """
-        # TODO: restrict shown amount of examples
-        pass
+        info = self.statistics()
+
+        some_words = self.data
+        is_shorted = False
+        if self._RESTRICT_SHOW is not False:
+            some_words = some_words[:self._RESTRICT_SHOW]
+            is_shorted = True
+
+        if is_shorted is True:
+            some_words += ['...']
+        some_words = '\n'.join(str(word) for word in some_words)
+
+        return f"{info}\n\n{some_words}"
 
     def __bool__(self) -> bool:
         """
@@ -715,6 +813,11 @@ class Vocabulary:
         return hash(self.data)
 
 
+if __name__ == '__main__':
+    db_path = Path("C:\\Users\\Пользователь\\Desktop\\Temporary mediator\\Vocabulary\\Vocabulary\\data\\user_data\\eng_vocabulary.db")
+    vocab = Vocabulary(db_path)
+    print(vocab)
+    # vocab.visual_info()
 # TODO: как сказать по-английски?
 #  как сказать по-русски?
 #  ряд синонимов,
@@ -722,4 +825,5 @@ class Vocabulary:
 #  полные предложения без перевода,
 #  предложения без запоминаемой лексемы с переводом,
 #  ассоциации с русскими лексемами, картинкми, образами,
-#  переписывать предложения, заменив русские слова английскими (русские ↔ английскимми)
+#  переписывать предложения, заменив русские
+#  слова английскими (русские ↔ английскимми)
