@@ -1,271 +1,217 @@
 __all__ = 'SelfExamples'
 
-import asyncio
-import os
-import random as rand
-from builtins import enumerate
+import re
+import sqlite3
+from datetime import datetime
 from pathlib import Path
-from pprint import pprint
-from socket import timeout
-from sys import stderr
-from time import time
 from typing import (
-    List, Dict, Callable, Tuple, Any
+    List, Callable, Any
 )
 
-import aiohttp
-import bs4
-
-# from src.backup.setup import backup
-from requests import get
-
-import src.main.constants as const
-import src.main.common_funcs as comm_func
+import src.main.common_funcs as comm_funcs
 
 
-class Examples:
-    """ Base examples class """
-    __slots__ = '_word', '_examples', '_marker'
+class SelfExamples:
+    """ Working with self examples """
+    __slots__ = '_sentences', '_marker', '_db', '_cursor'
+    _TABLE_NAME = 'self_examples'
 
     def __init__(self,
-                 word: str,
-                 **kwargs) -> None:
-        """ Init the word and examples base
+                 db_path: Path,
+                 marker: Callable = None) -> None:
+        """ Create a connection to the database,
+        load all sentences from there.
 
-        :param word: str, word to find its examples.
-        :keyword marker: function to highlight searched words in examples.
+        :param db_path: Path to the database.
+        :param marker: function to highlight searched words in sentences.
         :return: None.
+        :exception FileExistsError: if the file doesn't exist.
+        :exception sqlite3.Error: if something went wrong while
+        creating connection to the database.
+        :exception ValueError: if the database doesn't contain the table.
         """
-        self._word = comm_func.fmt_str(word)
-        self._examples = []
+        if not db_path.exists():
+            raise FileExistsError(f"File '{db_path}' not found")
+
+        try:
+            self._db = comm_funcs.create_connection(db_path)
+        except sqlite3.Error:
+            print("Error while connecting to the database, working stopped")
+            raise
+
+        self._cursor = self._db.cursor()
+        if self._TABLE_NAME not in comm_funcs.get_table_names(self._cursor):
+            raise ValueError("Database doesn't contain the table")
+
+        self._sentences = self._load()
 
         # function to highlight searched words in examples
-        marker = kwargs.get('marker', None)
         self._marker = marker
 
-    @property
-    def examples(self) -> List[str]:
-        """ Get examples list """
-        return self._examples
+    def _load(self) -> List[str]:
+        """ Get all sentences from the table in the database.
 
-    @property
-    def word(self) -> str:
-        """ Get word to search """
-        return self._word
-
-    def shuffle(self) -> None:
-        """ Shuffle the examples list
-
-        :return: None
+        :return: list of str, all sentences.
         """
-        rand.shuffle(self._examples)
+        data = self._cursor.execute(
+            f""" SELECT sentence FROM {self._TABLE_NAME} """
+        )
+        return [
+            result[0]
+            for result in data.fetchall()
+        ]
+
+    @property
+    def sentences(self) -> List[str]:
+        """
+        :return: list of str, list of all sentences.
+        """
+        return self._sentences
+
+    @property
+    def marker(self) -> Callable:
+        """
+        :return: callable obj, marker function.
+        """
+        return self._marker
+
+    def find_examples(self,
+                      word: str) -> List[str]:
+        """ Find all sentences with the word insight.
+        All found words'll be marked.
+
+        :param word: str, word to find its examples.
+        :return: list of str, sentences with the word.
+        """
+        data = self._cursor.execute(
+            f""" SELECT sentence FROM {self._TABLE_NAME} WHERE sentence LIKE '%{word}%' """
+        )
+
+        return [
+            self.mark_words(result[0], word)
+            for result in data.fetchall()
+        ]
+
+    def find_date(self,
+                  date: datetime.date) -> List[str]:
+        """ Get all sentences created on the date.
+
+        :param date: datetime.date object.
+        :return: list of str, sentences.
+        """
+        data = self._cursor.execute(
+            f""" SELECT sentence FROM {self._TABLE_NAME} WHERE date = {date} """
+        )
+        return [
+            result[0]
+            for result in data.fetchall()
+        ]
 
     def sort(self,
              key: Callable = len,
              reverse: bool = False) -> None:
-        """ Sort the examples list by the given key (callable object).
+        """ Sort the sentences list by the key.
         By default – sorting by len of sentences.
 
-        Supports standard list.sort params.
-
-        :param key: callable obj, default – len.
-        :param reverse: bool, whether sort'll be in reversed order.
-        :return: None
+        :param key: callable obj, key to sort sentences.
+        By default – len.
+        :param reverse: bool, whether the list'll be sorted in
+        reversed order.
+        :return: None.
         :exception TypeError: if the key is uncallable.
         """
         if not callable(key):
             raise TypeError("Sort key must be callable")
 
-        self._examples.sort(key=lambda x: key(x), reverse=reverse)
+        self._sentences.sort(key=key, reverse=reverse)
 
-    def mark_searched_words(self,
-                            _str: str,
-                            words: List[str]) -> str:
-        """ Mark words in str by using self._marker function.
+    def mark_words(self,
+                   string: str,
+                   word: str) -> str:
+        """ Mark words in the string by using marker function.
 
-        if _words is empty or marker is None – return _str.
+        if the word is empty or marker is None –
+        return string without changes.
 
-        :param _str: string, str to mark words.
-        :param words: list of strings, words to mark.
-        :return: string, str with marked words or original str
-         if marker is None or _words is empty.
-        :exception Trouble: if wrong type given.
+        :param string: str to mark words here.
+        :param word: str, word to mark.
+        :return: str with marked words or original one.
         """
-        if self._marker is None or not words:
-            return _str
+        if self.marker is None or not word:
+            return string
 
-        words = _str.split()
-        marked_words = [
-            self._marker(i)
-            if any(sw.lower() == comm_func.clean_up(i).lower() for sw in words) else i
-            for i in words
-        ]
-        return ' '.join(marked_words)
+        for match in re.finditer(fr'\b\w*{word}\w*\b', string, flags=re.IGNORECASE):
+            start, end = match.start(), match.end()
+            string = f"{string[:start]}{self.marker(string[start:end])}{string[end:]}"
+        return string
+
+    def __call__(self,
+                 word: str) -> List[str]:
+        """ Find all sentences with the word insight.
+
+        All the same to find_examples().
+
+        :param word: str, word to find its examples.
+        :return: list of str, sentences with the word.
+        """
+        return self.find_examples(word)
+
+    def __contains__(self,
+                     word: str) -> bool:
+        """
+        :param word: str, word to check.
+        :return: whether there's a sentence with the word.
+        """
+        data = self._cursor.execute(
+            f""" SELECT sentence FROM {self._TABLE_NAME} WHERE sentence LIKE '%{word}%' """
+        )
+        return bool(data.fetchone())
+
+    def __str__(self) -> str:
+        """
+        :return: all sentences from the base, joined with \n.
+        """
+        return '\n'.join(self.sentences)
 
     def __iter__(self) -> iter:
         """
-        :return: iter to examples list.
+        :return: iter to sentences list.
         """
-        return iter(self.examples)
+        return iter(self.sentences)
 
     def __bool__(self) -> bool:
         """
-        :return: whether the examples list exists.
+        :return: whether the sentences list exists.
         """
-        return bool(self.examples)
+        return bool(self.sentences)
 
     def __getitem__(self,
                     item: int or slice) -> List[str]:
-        """ Standard list method, get item at the index.
+        """ Get the item at the index or the list with sliced data.
 
         :param item: int or slice.
-        :return: ane example or list of them.
+        :return: one sentence or list of them.
         :exception TypeError: if wrong type given.
         """
         if isinstance(item, (int, slice)):
-            return self.examples[item]
+            return self.sentences[item]
         raise TypeError(f"Wrong value: {item}, int or slice expected")
 
     def __len__(self) -> int:
         """
-        :return: int, examples list size.
+        :return: int, sentences list size.
         """
-        return len(self.examples)
-
-
-class SelfExamples(Examples):
-    """ Class to work with self examples """
-    __slots__ = '_path', '_examples', '_marker'
-
-    def __init__(self,
-                 f_path: Path = SELF_EX_PATH,
-                 **kwargs) -> None:
-        """ Init path, load examples from it
-
-        :param f_path: string or Path, path to the self examples base
-        :keyword marker: function to highlight searched words in examples,
-         it must be callable, otherwise it is None
-        :return: None
-        :exception Trouble: if file does not exist
-        """
-        super().__init__("init", **kwargs)
-        if isinstance(f_path, str):
-            f_path = Path(f_path)
-
-        if not f_path.exists():
-            raise Trouble(self.__init__, f_path, _p='w_file')
-
-        self._path = f_path
-        self._examples = self._load()
-
-    def _load(self) -> List[str]:
-        """ Load examples from the base,
-            register does not change,
-            encoding – UTF-8
-
-        :return: list of str, examples from the base
-        """
-        examples = self._path.open('r', encoding='utf-8').readlines()
-        examples = filter(lambda x: not ('[' in x or ']' in x), examples)
-        examples = filter(lambda x: x.strip(), examples)
-        return [
-            i.strip()
-            for i in examples
-        ]
-
-    def find(self,
-             _word: str) -> List[str]:
-        """ Find all examples of the word,
-        mark searched words by using _marker function
-
-        :param _word: str, word to find its examples,
-         lowered and stripped
-        :return: list of str, all examples (_word in this sentence)
-        :exception Trouble: if wrong type given,
-         _word is empty or ' ' in _word
-        """
-        if not (isinstance(_word, str) and _word and ' ' not in _word):
-            raise Trouble(self.find, _word, _p='w_str')
-
-        _word = fmt_str(_word)
-        return [
-            self.mark_searched_words(sent, [_word])
-            for sent in self._examples
-            if _word in sent.lower()
-        ]
-
-    def count(self,
-              _word: str) -> int:
-        """ Count of examples of the word in the base,
-            len of the find() list
-
-        :param _word: str, word to find the count
-         of its examples, lowered and stripped
-        :return: int, count of the examples
-        :exception Trouble: if wrong type given,
-         _word is empty or ' ' in _word
-        """
-        return len(self.find(_word))
-
-    def __call__(self,
-                 _word: str) -> List[str]:
-        """ Find all examples of the word;
-            The same as find(_word)
-
-        :param _word: str, word to find its examples,
-         lowered and stripped
-        :return: list of str, all examples (_word in this sentence)
-        :exception Trouble: if wrong type given,
-         _word is empty or ' ' in _word
-        """
-        return self.find(_word)
-
-    def __contains__(self,
-                     _word: str) -> bool:
-        """ Is there an example in the base?
-            bool to find(_word) list
-
-        :param _word: word to find its example,
-         lowered and stripped
-        :return: bool, Is there an example in the base?
-        :exception Trouble: if wrong type given,
-         _word is empty or ' ' in _word
-        """
-        return bool(self.find(_word))
-
-    def __str__(self) -> str:
-        """ Examples, enumerated with 1 if they exist,
-            'Examples do not exist' – otherwise
-
-        :return: str with enumerated examples or
-        'Examples do not exist'
-        """
-        if not self._examples:
-            return "Examples do not exist"
-
-        _res = [
-            f"{num}. {sent}"
-            for num, sent in enumerate(self._examples, 1)
-        ]
-        return '\n'.join(_res)
+        return len(self.sentences)
 
     def __eq__(self,
-               other) -> bool:
-        """ Compare examples lists
-
-        :param other: another list or SelfExamples obj
-        :return: does the lists equal?
-        :exception Trouble: if wrong type given
+               other: Any) -> bool:
         """
-        if isinstance(other, SelfExamples):
-            return self._examples == other._examples
+        :param other: another SelfExamples obj or list.
+        :return: bool, whether the sentences lists equal.
+        :exception TypeError: if the wrong type given.
+        """
+        if isinstance(other, self.__class__):
+            return self.sentences == other.sentences
         elif isinstance(other, list):
-            return self._examples == other
-        else:
-            raise Trouble(self.__eq__,
-                          f"Wrong type: '{other}'",
-                          f"list or SelfExamples object")
-
-
-if __name__ == '__main__':
-    pass
+            return self.sentences == other
+        raise TypeError(f"'Operator ==' not implemented to {type(self)} and {type(other)}")

@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import json
 import re
+import sqlite3
 from mimetypes import MimeTypes
 from pathlib import Path
 from typing import List, Dict, Callable
@@ -343,3 +344,53 @@ def today(fmt: str = const.DATEFORMAT) -> str or datetime.date:
     if fmt:
         return date.strftime(fmt)
     return date
+
+
+def create_connection(db_path: Path) -> sqlite3.Connection:
+    """ Create a connection to the database.
+
+    Here it's assumed that the file exists.
+
+    :param db_path: Path to the database file.
+    :return: sqlite3.Connection to the database.
+    :exception sqlite3.Error: if something went wrong.
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+    except sqlite3.Error:
+        raise
+    return conn
+
+
+def get_table_names(cursor: sqlite3.Cursor) -> List[str]:
+    """ Get the names of tables in the database.
+
+    :param cursor: sqlite3.Cursor to request to the database.
+    :return: list of str, name of the tables in the database.
+    """
+    tables = cursor.execute(
+        """ SELECT name FROM sqlite_master WHERE type="table" """
+    )
+    return [
+        item[0]
+        for item in tables.fetchall()
+    ]
+
+
+def get_columns_names(cursor: sqlite3.Cursor,
+                      table_name: str) -> List[str]:
+    """ Get the names of columns in the table.
+
+    Here it's assumed that the table exists.
+
+    :param cursor: sqlite3.Cursor to request to the database.
+    :param table_name: str, name of the table to get names of its columns.
+    :return: list of str, names of the columns
+    """
+    columns = cursor.execute(
+        f""" SELECT * FROM {table_name} """
+    )
+    return [
+        i[0]
+        for i in columns.description
+    ]
