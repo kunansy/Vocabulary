@@ -78,9 +78,9 @@ def language(item: str) -> str or None:
     :param item: str to define its language.
     :return: str, 'rus', 'eng' or None if it isn't Rus or Eng.
     """
-    if re.findall(r'[а-яё]', item, re.IGNORECASE):
+    if re.search(r'[а-яё]', item, re.IGNORECASE):
         return 'rus'
-    elif re.findall('r[a-z]', item, re.IGNORECASE):
+    elif re.search('r[a-z]', item, re.IGNORECASE):
         return 'eng'
 
 
@@ -124,8 +124,8 @@ def str_to_date(item: str or datetime.date,
     ]
     filtered_str = ''.join(filtered_str)
 
-    day, month, year = filtered_str.split(s_sym)
-    day, month, year = int(day[:2]), int(month[:2]), int(year[:4])
+    year, month, day = filtered_str.split(s_sym)
+    year, month, day = int(year[:4]), int(month[:2]), int(day[:2])
 
     if swap:
         return datetime.date(year, day, month)
@@ -312,7 +312,7 @@ def american_spelling(word: str) -> bool:
     :return: bool, fit or not.
     """
     # wrong ends
-    pattern = re.compile(r'\B*(uo|tre|nce|mm|ue|se|ll|re)\b+', re.IGNORECASE)
+    pattern = re.compile(r'\B*(uo|tre|nce|mm|ue|se|ll|re)\b', re.IGNORECASE)
     # the word doesn't fit if there's a wrong end found
     return bool(pattern.search(word))
 
@@ -344,22 +344,6 @@ def today(fmt: str = const.DATEFORMAT) -> str or datetime.date:
     if fmt:
         return date.strftime(fmt)
     return date
-
-
-def create_connection(db_path: Path) -> sqlite3.Connection:
-    """ Create a connection to the database.
-
-    Here it's assumed that the file exists.
-
-    :param db_path: Path to the database file.
-    :return: sqlite3.Connection to the database.
-    :exception sqlite3.Error: if something went wrong.
-    """
-    try:
-        conn = sqlite3.connect(db_path)
-    except sqlite3.Error:
-        raise
-    return conn
 
 
 def get_table_names(cursor: sqlite3.Cursor) -> List[str]:
