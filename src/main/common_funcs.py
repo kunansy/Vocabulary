@@ -66,9 +66,6 @@ def extend_filename(path: Path,
     if not isinstance(path, Path):
         raise TypeError(f"Path expected, {type(path)} given")
 
-    if not path.suffix:
-        return Path(f"{path}{add}")
-
     return path.parent / f"{path.stem}{add}{path.suffix}"
 
 
@@ -95,36 +92,22 @@ def is_english(item: str) -> bool:
 
 
 def str_to_date(item: str or datetime.date,
+                split_symbol: str = '-',
                 swap: bool = False) -> datetime.date:
     """ Convert an item to date obj.
 
     :param item: str or date to convert.
+    :param split_symbol: str, symbol with which day, month
+    and year is divided.
     :param swap: bool, if it's True, swap day and month.
     :return: date, converted item.
-    :exception AssertionError: if there're >= split
-    symbols in the date.
     """
     if isinstance(item, datetime.date):
         if swap:
             return datetime.date(item.year, item.day, item.month)
         return item
 
-    item = fmt_str(item)
-    s_sym = [
-        i for i in item
-        if not i.isdigit()
-    ]
-    s_sym = max(set(s_sym), key=s_sym.count)
-
-    assert len(s_sym) is 1, "Split symbol must be single"
-
-    filtered_str = [
-        i for i in item
-        if i.isdigit() or i in s_sym
-    ]
-    filtered_str = ''.join(filtered_str)
-
-    year, month, day = filtered_str.split(s_sym)
+    year, month, day = item.split(split_symbol)
     year, month, day = int(year[:4]), int(month[:2]), int(day[:2])
 
     if swap:
@@ -286,23 +269,36 @@ def clean_up(item: str) -> str:
     :return: filtered str.
     """
     filtered = [
-        i for i in item
-        if i.isalnum() or i in '-'
+        symbol for symbol in item
+        if symbol.isalnum() or symbol in '-'
     ]
     return ''.join(filtered)
 
 
 def change_words(full_str: str,
                  item: str,
-                 f: Callable) -> str:
+                 marker: Callable) -> str:
     """ Change all words similar to the item by using the function.
     Register is ignored.
 
+    if the item is empty or marker is None –
+    return string without changes.
+
     :param full_str: str, change items here.
     :param item: str to change.
-    :param f: callable obj, changing the item.
+    :param marker: callable obj, changing the item.
+    :return: changed str or original one.
     """
-    return re.sub(item, f(item), full_str, flags=re.IGNORECASE)
+    if not item or marker is None:
+        return full_str
+
+    pattern = re.compile(fr'\b\w*{item}\w*\b', re.IGNORECASE)
+    for match in pattern.finditer(full_str):
+        start, end = match.start(), match.end()
+        full_str = f"{full_str[:start]}" \
+                   f"{marker(full_str[start:end])}" \
+                   f"{full_str[end:]}"
+    return full_str
 
 
 def american_spelling(word: str) -> bool:
@@ -318,7 +314,7 @@ def american_spelling(word: str) -> bool:
 
 
 def word_id(item: str) -> str:
-    """ Get words ID.
+    """ Get word's ID.
 
     ID – first and last 8 symbol from sha3_512 hash.
 

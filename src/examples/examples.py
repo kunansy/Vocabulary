@@ -1,8 +1,7 @@
 __all__ = 'SelfExamples'
 
-import re
+import datetime
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 from typing import (
     List, Callable, Any
@@ -34,9 +33,9 @@ class SelfExamples:
             raise FileExistsError(f"File '{db_path}' not found")
 
         try:
-            self._db = comm_funcs.create_connection(db_path)
+            self._db = sqlite3.connect(db_path)
         except sqlite3.Error:
-            print("Error while connecting to the database, working stopped")
+            print("Error while connecting to the database")
             raise
 
         self._cursor = self._db.cursor()
@@ -75,6 +74,22 @@ class SelfExamples:
         """
         return self._marker
 
+    def add_sentence(self,
+                     sentence: str,
+                     date: datetime.date = None) -> None:
+        """ Add a sentence to the database.
+
+        :param sentence: str, sentence to add.
+        :param date: datetime.date, date of the sentence creating.
+        By default it's equal to today.
+        """
+        date = date or datetime.datetime.now().date()
+        self._cursor.execute(
+            f""" INSERT INTO {self._TABLE_NAME} (date, sentence) 
+                  VALUES ({date}), ({sentence}) """
+        )
+        self._db.commit()
+
     def find_examples(self,
                       word: str) -> List[str]:
         """ Find all sentences with the word insight.
@@ -84,11 +99,12 @@ class SelfExamples:
         :return: list of str, sentences with the word.
         """
         data = self._cursor.execute(
-            f""" SELECT sentence FROM {self._TABLE_NAME} WHERE sentence LIKE '%{word}%' """
+            f""" SELECT sentence FROM {self._TABLE_NAME} 
+                  WHERE sentence LIKE '%{word}%' """
         )
 
         return [
-            self.mark_words(result[0], word)
+            comm_funcs.change_words(result[0], word, self.marker)
             for result in data.fetchall()
         ]
 
@@ -100,7 +116,8 @@ class SelfExamples:
         :return: list of str, sentences.
         """
         data = self._cursor.execute(
-            f""" SELECT sentence FROM {self._TABLE_NAME} WHERE date = {date} """
+            f""" SELECT sentence FROM {self._TABLE_NAME} 
+                  WHERE date = {date} """
         )
         return [
             result[0]
@@ -125,26 +142,6 @@ class SelfExamples:
 
         self._sentences.sort(key=key, reverse=reverse)
 
-    def mark_words(self,
-                   string: str,
-                   word: str) -> str:
-        """ Mark words in the string by using marker function.
-
-        if the word is empty or marker is None –
-        return string without changes.
-
-        :param string: str to mark words here.
-        :param word: str, word to mark.
-        :return: str with marked words or original one.
-        """
-        if self.marker is None or not word:
-            return string
-
-        for match in re.finditer(fr'\b\w*{word}\w*\b', string, flags=re.IGNORECASE):
-            start, end = match.start(), match.end()
-            string = f"{string[:start]}{self.marker(string[start:end])}{string[end:]}"
-        return string
-
     def __call__(self,
                  word: str) -> List[str]:
         """ Find all sentences with the word insight.
@@ -163,7 +160,8 @@ class SelfExamples:
         :return: whether there's a sentence with the word.
         """
         data = self._cursor.execute(
-            f""" SELECT sentence FROM {self._TABLE_NAME} WHERE sentence LIKE '%{word}%' """
+            f""" SELECT sentence FROM {self._TABLE_NAME} 
+                  WHERE sentence LIKE '%{word}%' """
         )
         return bool(data.fetchone())
 
@@ -214,4 +212,6 @@ class SelfExamples:
             return self.sentences == other.sentences
         elif isinstance(other, list):
             return self.sentences == other
-        raise TypeError(f"'Operator ==' not implemented to {type(self)} and {type(other)}")
+        raise TypeError(
+            f"'Operator ==' not implemented "
+            f"to {type(self)} and {type(other)}")

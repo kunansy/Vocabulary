@@ -143,6 +143,26 @@ class Word:
         """
         return self._properties
 
+    @property
+    def fields(self) -> Dict:
+        """
+        :return: dict of str and datetime.date, all word fields.
+        """
+        props = f"[{', '.join(self.properties)}]"
+
+        english = '; '.join(self.english)
+        russian = '; '.join(self.russian)
+
+        return {
+            'id': self.id,
+            'date': self.date,
+            'word': self.word,
+            'properties': props,
+            'transcription': '',
+            'English': english,
+            'Russian': russian
+        }
+
     def with_english(self) -> str:
         """
         :return: str, word with its English defs joined with '; '.
@@ -339,7 +359,7 @@ class Vocabulary:
         try:
             self._db = sqlite3.connect(db_path)
         except sqlite3.Error:
-            print("Something went while connecting to the database")
+            print("Something went wrong while connecting to the database")
             raise
         
         self._cursor = self._db.cursor()
@@ -414,7 +434,14 @@ class Vocabulary:
         :return: dict of datetime.date and int, pairs:
         date – amount of learned words in this date.
         """
-        dates = self.get_date_list()
+        dates = self._cursor.execute(
+            f""" SELECT date FROM {self._TABLE_NAME} """
+        )
+        dates = map(
+            lambda date: comm_funcs.str_to_date(date[0]),
+            dates.fetchall()
+        )
+        dates = list(dates)
         return dict(Counter(dates))
 
     def max_day_info(self) -> Tuple[datetime.date, int]:
@@ -422,29 +449,27 @@ class Vocabulary:
 
         :return: tuple of datetime.date and int.
         """
-        date, amount = max(self.dynamic().items(), key=lambda x: x[1])
-        return date.strftime(consts.DATEFORMAT), amount
+        date_to_amount = max(self.dynamic().items(), key=lambda x: x[1])
+        return date_to_amount
 
     def min_day_info(self) -> Tuple[datetime.date, int]:
         """ Get info about the day with max words count.
 
         :return: tuple of datetime.date and int.
         """
-        min_day = min(self.dynamic().items(), key=lambda x: x[1])
-        return tuple(min_day)
+        date_to_amount = min(self.dynamic().items(), key=lambda x: x[1])
+        return date_to_amount
 
-    def avg_count_of_words(self) -> float:
+    def avg_count_of_words(self) -> int:
         """
-        :return: float, average amount of words learned per one day.
+        :return: int, average amount of words learned per one day.
         """
         count_of_words = self.dynamic().values()
-        print(sum(count_of_words))
-        print(len(count_of_words))
-        return sum(count_of_words) / len(count_of_words)
+        return sum(count_of_words) // len(count_of_words)
 
     def empty_days_count(self) -> int:
         """
-        :return: int, amount of days, the user doing nothing.
+        :return: int, amount of days, the user did nothing.
         """
         return (self.end - self.begin).days + 1 - len(self.get_date_list())
 
@@ -468,13 +493,18 @@ class Vocabulary:
         total = len(self)
         would_be_total = total + avg_per_day * empty_days
 
+        max_date, max_amount = self.max_day_info()
+        min_date, min_amount = self.min_day_info()
+        min_date = min_date.strftime(consts.DATEFORMAT)
+        max_date = max_date.strftime(consts.DATEFORMAT)
+
         return f"Duration: {self.duration} days\n" \
                f"Average amount of learned words: {avg_per_day}\n" \
                f"Empty days: {empty_days}\n" \
                f"Total: {total}\n" \
                f"Would be total: {would_be_total}\n" \
-               f"Max day: {self.max_day_info()}\n" \
-               f"Min day: {self.max_day_info()}"
+               f"Max day: {max_date} = {max_amount}\n" \
+               f"Min day: {min_date} = {min_amount}"
 
     def get_date_list(self) -> List[datetime.date]:
         """ Get all dates from the database.
@@ -484,9 +514,8 @@ class Vocabulary:
         dates = self._cursor.execute(
             f""" SELECT DISTINCT date FROM {self._TABLE_NAME} """
         )
-        # print(*dates.fetchall(), sep='\n')
         dates = map(
-            comm_funcs.str_to_date,
+            lambda date: comm_funcs.str_to_date(date[0]),
             dates.fetchall()
         )
         return list(dates)
@@ -645,67 +674,57 @@ class Vocabulary:
         """
         pass
 
+    def _add_word_to_db(self,
+                        item: Word) -> None:
+        """ Add a word to the database.
+
+        :param item: Word to add.
+        :return: None.
+        :exception TypeError: of wrong type given.
+        """
+        if not isinstance(item, Word):
+            raise TypeError(f"Word expected, but '{type(item)}' given")
+
+        self._cursor.execute(
+            """ INSERT INTO Vocabulary (id, date, word, properties, 
+            transcription, English, Russian) VALUES (:id, :date, :word, 
+            :properties, :transcription, :English, :Russian) """,
+            *item.fields
+        )
+        self._db.commit()
+
     def append(self,
                item: Word) -> None:
-        """ Add a Word obj to the data list.
+        """ Add a Word to the database.
+
+        Update the data list.
 
         :param item: Word to add.
         :return: None.
         :exception TypeError: if wrong type given.
         """
-        if not isinstance(item, Word):
-            raise TypeError(f"Word expected, but '{type(item)}' given")
-        self._data.append(item)
+        try:
+            self._add_word_to_db(item)
+        except Exception:
+            raise
+        self._data = self._load()
 
     def extend(self,
                items: List[Word]) -> None:
-        """ Extend the data list by another list of them.
+        """ Extend the database.
+
+        Update the data list.
 
         :param items: list of Words to add.
         :return: None.
         :exception TypeError: if wrong type give.
         """
-        if (isinstance(items, list) and
-                all(isinstance(item, Word) for item in items)):
-            self._data.extend(items)
-        else:
-            raise TypeError(f"List of Words expected, but "
-                            f"'{type(items)}' of '{type(items)}' given")
-
-    def __add__(self,
-                other: Word or List[Word]) -> List[Word]:
-        """ Concatenate the data list with the
-        given Word or list of Words.
-
-        :param other: Word or list of them.
-        :return: list of words, concatenated lists.
-        :exception TypeError: if wrong type give.
-        """
-        if isinstance(other, Word):
-            return self.data + [other]
-        elif (isinstance(other, list) and
-              all(isinstance(item, Word) for item in other)):
-            return self.data + other
-        else:
-            raise TypeError("Wrong type, Word or list of Words expected")
-
-    def __iadd__(self,
-                 other: Word or List[Word]) -> Any:
-        """ Extend the data list by one word on list of them.
-
-        :param other: Word or list of them, word(s) to add.
-        :return: self.
-        :exception TypeError: if wrong type give.
-        """
-        if isinstance(other, Word):
-            self._data += [other]
-            return self
-        elif (isinstance(other, list) and
-              all(isinstance(item, Word) for item in other)):
-            self._data += other
-            return self
-        else:
-            raise TypeError("Wrong type, Word or list of Words expected")
+        for word in items:
+            try:
+                self._add_word_to_db(word)
+            except Exception:
+                raise
+        self._data = self._load()
 
     def __contains__(self,
                      item: str or Word) -> bool:
@@ -790,7 +809,10 @@ class Vocabulary:
 
         if is_shorted is True:
             some_words += ['...']
-        some_words = '\n'.join(str(word) for word in some_words)
+        some_words = '\n'.join(
+            f"{num}. {word}"
+            for num, word in enumerate(some_words)
+        )
 
         return f"{info}\n\n{some_words}"
 
@@ -813,11 +835,6 @@ class Vocabulary:
         return hash(self.data)
 
 
-if __name__ == '__main__':
-    db_path = Path("C:\\Users\\Пользователь\\Desktop\\Temporary mediator\\Vocabulary\\Vocabulary\\data\\user_data\\eng_vocabulary.db")
-    vocab = Vocabulary(db_path)
-    print(vocab)
-    # vocab.visual_info()
 # TODO: как сказать по-английски?
 #  как сказать по-русски?
 #  ряд синонимов,
