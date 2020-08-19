@@ -64,12 +64,12 @@ ENG_PREPS = [
     'about', 'into', 'from', 'under', 'over', 'around', 'towards'
 ]
 
-_ini = ConfigParser()
-_ini.read('D:\\Python\\Projects\\Vocabulary\\INIT.ini')
+# _ini = ConfigParser()
+# _ini.read('D:\\Python\\Projects\\Vocabulary\\INIT.ini')
 
 
-__LANGUAGE__ = _ini['settings']['__LANGUAGE__']
-__NATIVE__ = _ini['settings']['__NATIVE__']
+# __LANGUAGE__ = _ini['settings']['__LANGUAGE__']
+# __NATIVE__ = _ini['settings']['__NATIVE__']
 
-VOCABULARY_DB_PATH = USER_DATA_PATH / f"{__LANGUAGE__}_{VOCABULARY_DB_PATH}"
-REPEAT_LOG_PATH = USER_DATA_PATH / f"{__LANGUAGE__}_{REPEAT_LOG_PATH}"
+VOCABULARY_DB_PATH = USER_DATA_PATH / f"en_{VOCABULARY_DB_PATH}"
+REPEAT_LOG_PATH = USER_DATA_PATH / f"en_{REPEAT_LOG_PATH}"
