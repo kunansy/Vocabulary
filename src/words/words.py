@@ -1,61 +1,63 @@
 import datetime
+import functools
+import itertools
 import os
 import sqlite3
 from collections import Counter
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 
+import xlrd
+
 import src.docs.create_doc as create_doc
 import src.main.common_funcs as comm_funcs
 import src.main.constants as consts
 
 
-# def init_from_xlsx(f_name: Path,
-#                    out: Path = 'tmp',
-#                    date=None):
-#     """ Преобразовать xlsx файл в список объектов класса Word,
-#         вывести их в файл с дополнением старого содержимого
-#     """
-#     # TODO: Редактировать после перехода к db
-#     assert f_name.exists(), \
-#         f"File: '{f_name}' does not exist, func – init_from_xlsx"
-#
-#     if not out.exists():
-#         with out.open('w'):
-#             pass
-#
-#     if date is None:
-#         date = datetime.date.today()
-#     else:
-#         date = comm_funcs.str_to_date(date).strftime(const.DATEFORMAT)
-#
-#     assert f"[{date}]\n" not in out.open('r', encoding='utf-8').readlines(), \
-#         f"Date '{date}' currently exists in the '{out}' file, func – init_from_xlsx"
-#
-#     rb = open_workbook(str(f_name))
-#     sheet = rb.sheet_by_index(0)
-#
-#     # удаляется заглавие, введение и прочие некорректные данные
-#     content = list(filter(lambda x: len(x[0]) and (len(x[2]) or len(x[3])),
-#                           [sheet.row_values(i) for i in range(sheet.nrows)]))
-#     content.sort(key=lambda x: x[0])
-#
-#     # группировка одинаковых слов вместе
-#     content = itertools.groupby(
-#         map(lambda x: Word(x[0], x[2], x[3]), content),
-#         key=lambda x: (x._word, x.properties)
-#     )
-#
-#     # суммирование одинаковых слов в один объект класса Word
-#     result = [
-#         functools.reduce(lambda res, elem: res + elem, list(group[1]), Word(''))
-#         for group in content
-#     ]
-#
-#     with out.open('a', encoding='utf-8') as f:
-#         f.write(f"\n\n[{date}]\n")
-#         f.write('\n'.join(map(str, result)))
-#         f.write(f"\n[/{date}]\n")
+def parse_cambridge_xlsx(f_name: Path,
+                         date: datetime.date = None) -> List[Any]:
+    """ Parse xlsx file from Cambridge Dictionary to list of words.
+
+    There are words with one definition. Group the similar words
+    with the different definitions to Word.
+
+    :param f_name: Path, name of xlsx file.
+    :param date: datetime.date, words have been learned on this date.
+    :return: list of Words.
+    """
+    if not f_name.exists():
+        raise FileExistsError("File doesn't exist")
+
+    date = date or comm_funcs.today()
+
+    rb = xlrd.open_workbook(str(f_name))
+    sheet = rb.sheet_by_index(0)
+    row_values = [
+        sheet.row_values(row)
+        for row in range(sheet.nrows)
+    ]
+    # remove empty row ([0]), header, description etc ([1])
+    row_values = row_values[2:]
+    row_values.sort(key=lambda x: x[0])
+    content = [
+        Word(word=field[0], date=date, properties=field[1],
+             english=field[2], russian=field[3])
+        for field in row_values
+    ]
+    # group the same words
+    content = itertools.groupby(
+        content, key=lambda word: (word.word, word.properties))
+
+    words = []
+    for group in content:
+        # sum the same words to one
+        words += [
+            functools.reduce(
+                lambda res, word_with_one_def: res + word_with_one_def,
+                list(group[1]),
+                Word(''))
+        ]
+    return words
 
 
 class Word:
@@ -66,15 +68,15 @@ class Word:
     def __init__(self,
                  word: str = '',
                  date: datetime.date or str = None,
-                 properties: set or str = None,
-                 english: List[str] = None,
-                 russian: List[str] = None) -> None:
+                 properties: List[str] or str = None,
+                 english: str or List[str] = None,
+                 russian: str or List[str] = None) -> None:
         """
-        :param word: str, word to learn.
-        :param properties: set or str, language level, formal, ancient etc.
-        :param date: datetime.date, in the date word has been learned.
-        :param english: list of str, English definitions of the word.
-        :param russian: list of str, Russian definitions of the word.
+        :param word: str, word. It will be lowered and stripped.
+        :param properties: str or list of str, language level, formal, ancient etc.
+        :param date: datetime.date, in this date the word has been learned.
+        :param english: str or list of str, English definitions of the word.
+        :param russian: str or list of str, Russian definitions of the word.
         """
         self._word = comm_funcs.fmt_str(word)
         self._id = comm_funcs.word_id(self._word)
@@ -86,19 +88,22 @@ class Word:
         self._russian_defs = (
             russian.split('; ') if isinstance(russian, str) else russian)
 
-        self._date = (comm_funcs.str_to_date(date) or
-                      datetime.datetime.now().date())
+        date = date or comm_funcs.today()
+        self._date = comm_funcs.str_to_date(date)
 
-        properties = properties or set()
+        properties = properties or list()
         if isinstance(properties, str):
-            # properties here like '[p1, ...]'
-            properties = properties[1:-1].split(', ')
+            if properties.startswith('[') and properties.endswith(']'):
+                properties = properties[1:-1]
+            properties = properties.split(', ')
 
-        properties = set(
+        properties = [
             comm_funcs.fmt_str(prop)
             for prop in properties
             if prop
-        )
+        ]
+        properties = list(Counter(properties).keys())
+        properties.sort()
         self._properties = properties
 
     @property
@@ -137,9 +142,9 @@ class Word:
         return self._russian_defs
 
     @property
-    def properties(self) -> set:
+    def properties(self) -> List[str]:
         """
-        :return: set, word's properties.
+        :return: list of str, word's properties.
         """
         return self._properties
 
@@ -148,7 +153,7 @@ class Word:
         """
         :return: dict of str and datetime.date, all word fields.
         """
-        props = f"[{', '.join(self.properties)}]"
+        props = f"[{', '.join(self.properties)}]" * bool(self.properties)
 
         english = '; '.join(self.english)
         russian = '; '.join(self.russian)
@@ -158,7 +163,6 @@ class Word:
             'date': self.date,
             'word': self.word,
             'properties': props,
-            'transcription': '',
             'English': english,
             'Russian': russian
         }
@@ -186,7 +190,7 @@ class Word:
         :return: bool, whether the word fit with the all properties.
         """
         return all(
-            prop.lower() in self.properties
+            comm_funcs.fmt_str(prop) in self.properties
             for prop in properties
         )
 
@@ -217,13 +221,13 @@ class Word:
         if not isinstance(other, Word):
             raise TypeError(f"Operator + between Word and str isn't supported")
 
-        if self.word != other.word and self.word != other.word != '':
+        if self.word != other.word and all([self.word, other.word]):
             raise ValueError("Operator + demands for the equal words")
 
         return Word(
             max(self.word, other.word),
             min(self.date, other.date),
-            self.properties.union(other.properties),
+            other.properties + self.properties,
             other.english + self.english,
             other.russian + self.russian
         )
@@ -295,8 +299,8 @@ class Word:
         """
         item = comm_funcs.fmt_str(item)
         return any(
-            item in definition
-            for definition in [self.word] + self.english + self.russian
+            item in field
+            for field in [self.word] + self.english + self.russian
         )
 
     def __str__(self) -> str:
@@ -507,7 +511,7 @@ class Vocabulary:
                f"Min day: {min_date} = {min_amount}"
 
     def get_date_list(self) -> List[datetime.date]:
-        """ Get all dates from the database.
+        """ Get all dates when the user learned something.
 
         :return: list of datetime.date, all dates.
         """
@@ -687,9 +691,9 @@ class Vocabulary:
 
         self._cursor.execute(
             """ INSERT INTO Vocabulary (id, date, word, properties, 
-            transcription, English, Russian) VALUES (:id, :date, :word, 
-            :properties, :transcription, :English, :Russian) """,
-            *item.fields
+            transcription, English, Russian) VALUES (:id, :date, 
+            :word, :properties, '', :English, :Russian) """,
+            item.fields
         )
         self._db.commit()
 

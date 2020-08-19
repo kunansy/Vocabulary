@@ -329,10 +329,10 @@ def word_id(item: str) -> str:
     return _id[:const.ID_LENGTH // 2] + _id[-const.ID_LENGTH // 2:]
 
 
-def today(fmt: str = const.DATEFORMAT) -> str or datetime.date:
+def today(fmt: str = None) -> str or datetime.date:
     """ Get today: date obj or str with the date format.
 
-    :param fmt: string, date format.
+    :param fmt: str, date format. By default = None.
     :return: str or date, format is None – date, else – str.
     """
     date = datetime.datetime.now().date()
