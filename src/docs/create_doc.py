@@ -2,6 +2,7 @@ __all__ = (
     'create_pdf', 'visual_info', 'create_docx'
 )
 
+import datetime
 import os
 from pathlib import Path
 from typing import List, Dict
@@ -11,7 +12,6 @@ import docx
 import xlsxwriter
 from docx.shared import Pt
 
-import src.main.common_funcs as comm_func
 import src.main.constants as const
 
 FONT_NAME = 'Avenir Next Cyr'
@@ -71,7 +71,7 @@ def create_pdf(f_path: str or Path,
         raise FileExistsError(f"PDF '{f_path}' still exists")
 
     # file mediator
-    date = comm_func.today(const.DATEFORMAT)
+    date = datetime.datetime.today().strftime(const.DATEFORMAT)
     mediator_path = const.PDF_FOLDER / f"temp_{len(content)}_{date}.docx"
     try:
         create_docx(mediator_path, content)

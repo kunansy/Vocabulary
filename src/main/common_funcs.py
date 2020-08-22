@@ -1,9 +1,9 @@
 __all__ = (
-    'today', 'word_id', 'clean_up',
+    'mime_type', 'word_id', 'clean_up',
     'language', 'just_word', 'load_json',
+    'get_synonyms', 'change_words', 'diff_words_id',
     'dump_json', 'fmt_str', 'is_russian', 'is_english',
     'str_to_date', 'extend_filename', 'american_spelling',
-    'mime_type', 'get_synonyms', 'change_words', 'diff_words_id'
 )
 
 import asyncio
@@ -327,19 +327,6 @@ def word_id(item: str) -> str:
 
     _id = hashlib.sha3_512(bytes(item, encoding='utf-8')).hexdigest()
     return _id[:const.ID_LENGTH // 2] + _id[-const.ID_LENGTH // 2:]
-
-
-def today(fmt: str = None) -> str or datetime.date:
-    """ Get today: date obj or str with the date format.
-
-    :param fmt: str, date format. By default = None.
-    :return: str or date, format is None – date, else – str.
-    """
-    date = datetime.datetime.now().date()
-
-    if fmt:
-        return date.strftime(fmt)
-    return date
 
 
 def get_table_names(cursor: sqlite3.Cursor) -> List[str]:

@@ -28,7 +28,7 @@ def parse_cambridge_xlsx(f_name: Path,
     if not f_name.exists():
         raise FileExistsError("File doesn't exist")
 
-    date = date or comm_funcs.today()
+    date = date or datetime.datetime.today()
 
     rb = xlrd.open_workbook(str(f_name))
     sheet = rb.sheet_by_index(0)
@@ -88,7 +88,7 @@ class Word:
         self._russian_defs = (
             russian.split('; ') if isinstance(russian, str) else russian)
 
-        date = date or comm_funcs.today()
+        date = date or datetime.datetime.today()
         self._date = comm_funcs.str_to_date(date)
 
         properties = properties or list()
