@@ -3,83 +3,71 @@ __all__ = 'RepeatWords'
 import random as rand
 from typing import List
 
-from PyQt5 import uic
-from PyQt5.QtWidgets import (
-    QWidget, QMainWindow
-)
+import PyQt5
+import PyQt5.QtWidgets as QtWidgets
+import rnc
 
-from src.examples.examples import (
-    EnglishCorpusExamples, RussianCorpusExamples, SelfExamples
-)
-from src.main.common_funcs import *
-from src.main.constants import *
-from src.trouble.trouble import Trouble
+import src.examples.examples as expl
+import src.main.common_funcs as comm_funcs
+import src.main.constants as consts
+import src.words.words as words
 
 
 # TODO: working with Russian
 
 
-class RepeatWords(QMainWindow):
+class RepeatWords(QtWidgets.QMainWindow):
     def __init__(self,
-                 _sample: List,
-                 _title: str = 'Repeat',
+                 sample: List[words.Word],
+                 title: str = 'Repeat',
                  mode: int = 1) -> None:
-        from src.main.main import Word
-        trbl = Trouble(self.__init__, _t=True)
+        if not consts.MAIN_WINDOW_PATH.exists():
+            raise FileNotFoundError(consts.MAIN_WINDOW_PATH)
+        if not consts.EXAMPLES_WINDOW_PATH.exists():
+            raise FileNotFoundError(consts.EXAMPLES_WINDOW_PATH)
+        if not consts.MESSAGE_WINDOW_PATH.exists():
+            raise FileNotFoundError(consts.MESSAGE_WINDOW_PATH)
+        if not consts.SHOW_WINDOW_PATH.exists():
+            raise FileNotFoundError(consts.SHOW_WINDOW_PATH)
 
-        if not MAIN_WINDOW_PATH.exists():
-            raise trbl(MAIN_WINDOW_PATH, _p='w_file')
-        if not EXAMPLES_WINDOW_PATH.exists():
-            raise trbl(EXAMPLES_WINDOW_PATH, _p='w_file')
-        if not MESSAGE_WINDOW_PATH.exists():
-            raise trbl(MESSAGE_WINDOW_PATH, _p='w_file')
-        if not SHOW_WINDOW_PATH.exists():
-            raise trbl(SHOW_WINDOW_PATH, _p='w_file')
-
-        if not (isinstance(_sample, list) and list):
-            raise trbl(_sample, _p='w_list')
-        # if not all(isinstance(i, Word) for i in words):
-        #     raise trbl(f"Wrong list elements", "Word obj")
-        if not isinstance(mode, (str, int)):
-            raise trbl(f"Wrong mode type: '{mode}'", "int or str")
-        if not (mode in ENG_REPEAT_MODS or mode in range(1, len(ENG_REPEAT_MODS) + 1)):
-            raise trbl(f"Wrong mode: '{mode}'")
-        if not isinstance(_title, str):
-            raise trbl(f"Wrong window title: '{_title}'", "str")
+        if not (isinstance(sample, list) and sample):
+            raise TypeError(f"Not empty list expected, {type(sample)} given")
+        if not (mode in consts.ENG_REPEAT_MODS or
+                mode in range(1, len(consts.ENG_REPEAT_MODS) + 1)):
+            raise ValueError(f"Wrong mode: '{mode}'")
 
         super().__init__()
-        uic.loadUi(MAIN_WINDOW_PATH, self)
-        self.initUI(_title)
+        PyQt5.uic.loadUi(consts.MAIN_WINDOW_PATH, self)
+        self.initUI(title)
 
-        self.word = Word('')
+        self.word = words.Word()
         # self.repeating_word_index = None
         # self.repeated_words_indexes = []
-        rand.shuffle(_sample)
-        self.words = _sample[:]
-        self.w_trans = list(reversed(_sample[:]))
+        rand.shuffle(sample)
+        self.words = sample[:]
+        self.w_trans = list(reversed(sample[:]))
 
         self.mode = None
         self.are_you_right = None
         self.init_button = None
         self.main_item = None
 
-        self.mode = mode if isinstance(mode, int) else ENG_REPEAT_MODS[mode]
+        self.mode = consts.ENG_REPEAT_MODS.get(mode, mode)
         self.init_fit_mode()
 
         # TODO: open it in init, write to the file while program works,
         #  close the file in __del__
         # create log file if there's no
-        if not REPEAT_LOG_PATH.exists():
-            with REPEAT_LOG_PATH.open('w', encoding='utf-8'):
-                pass
+        if not consts.REPEAT_LOG_PATH.exists():
+            consts.REPEAT_LOG_PATH.open('w')
 
     def initUI(self,
-               _title: str) -> None:
-        self.s_ex = SelfExamples()
+               title: str) -> None:
+        self.s_ex = expl.SelfExamples()
         self.ExamplesWindow = ExamplesWindow(self, [], _s_ex=self.s_ex, _c_name='en')
         self.MessageWindow = MessageWindow(self, [])
         self.ShowWindow = ShowWindow(self, [])
-        self.setWindowTitle(_title)
+        self.setWindowTitle(title)
 
         # кнопки выбора вариантов
         self.choice_buttons = [
@@ -106,18 +94,18 @@ class RepeatWords(QMainWindow):
         """ Работа в соответствии с mode """
         self.are_you_right = lambda x: x.lower() == self.init_button(self.word).lower()
 
-        if self.mode == 1:
-            self.init_button = lambda x: x.get_native(def_only=True).capitalize()
-            self.main_item = lambda: self.word._word.capitalize()
-        elif self.mode == 2:
-            self.init_button = lambda x: x._word.capitalize()
-            self.main_item = lambda: self.word.get_native(def_only=True).capitalize()
-        elif self.mode == 3:
-            self.init_button = lambda x: x.get_native(def_only=True).capitalize()
-            self.main_item = lambda: self.word.get_original(def_only=True).capitalize()
-        elif self.mode == 4:
-            self.init_button = lambda x: x.get_original(def_only=True).capitalize()
-            self.main_item = lambda: self.word.get_native(def_only=True).capitalize()
+        if self.mode is 1:
+            self.init_button = lambda word: '; '.join(word.russian).capitalize()
+            self.main_item = lambda: self.word.word.capitalize()
+        elif self.mode is 2:
+            self.init_button = lambda word: word.word.capitalize()
+            self.main_item = lambda: '; '.join(self.word.russian).capitalize()
+        elif self.mode is 3:
+            self.init_button = lambda word: '; '.join(word.russian).capitalize()
+            self.main_item = lambda: '; '.join(self.word.english).capitalize()
+        elif self.mode is 4:
+            self.init_button = lambda word: '; '.join(word.english).capitalize()
+            self.main_item = lambda: '; '.join(self.word.russian).capitalize()
 
     def test(self) -> None:
         # чтобы не остаться с пустым списком ошибочных переводов под конец
@@ -168,31 +156,30 @@ class RepeatWords(QMainWindow):
     #         self.test()
 
     def show_result(self,
-                    _result: str,
-                    _style: str) -> None:
-        self.MessageWindow.display(message=_result, style=_style)
+                    result: str,
+                    style: str) -> None:
+        self.MessageWindow.display(result, style)
 
     def are_you_right(self) -> None:
         if self.are_you_right(self.sender().text()):
-            self.show_result(_result='<i>Excellent</i>', _style="color: 'green';")
+            self.show_result('<i>Excellent</i>', "color: 'green';")
 
             self.test() if len(self.words) > 0 else self.close()
         else:
-            self.log(_w_choice=self.sender().text(), _item=self.word._word)
-            self.show_result(_result='<b>Wrong</b>', _style="color: 'red';")
+            self.log(self.word.word, self.sender().text())
+            self.show_result('<b>Wrong</b>', "color: 'red';")
 
     def hint(self) -> None:
         """ Показать подсказку: связные слова и примеры """
         if self.mode != 1:
             return
 
-        self.ExamplesWindow.display(word=self.word._word,
-                                    message=f"{self.HintButton.text()}",
-                                    style="color: blue")
+        self.ExamplesWindow.display(
+            self.word.word, f"{self.HintButton.text()}", "color: blue")
 
     def show_words(self) -> None:
-        self.ShowWindow.display(items=self.words,
-                                window_title=self.windowTitle())
+        self.ShowWindow.display(
+            self.words, self.windowTitle())
 
     def show(self) -> None:
         super().show()
@@ -206,19 +193,19 @@ class RepeatWords(QMainWindow):
         super().close()
 
     def log(self,
-            _item: str,
-            _w_choice: str) -> None:
+            item: str,
+            w_choice: str) -> None:
         """ Логгирование ошибочных вариантов в json:
             {ID_слова: {ID ошибочного варианта: количество ошибок}}
         """
-        from src.main.main import search_by_attribute
+        # TODO: search_by_attribute
 
-        repeating_word_id = word_id(_item)
+        repeating_word_id = comm_funcs.word_id(item)
 
         # Найти ID слова по выбранному варианту:
-        wrong_choice_id = word_id(search_by_attribute(self.w_trans, _w_choice))
-
-        data = load_json(REPEAT_LOG_PATH)
+        # wrong_choice_id = word_id(search_by_attribute(self.w_trans, _w_choice))
+        wrong_choice_id = ''
+        data = comm_funcs.load_json(consts.REPEAT_LOG_PATH)
 
         if repeating_word_id in data:
             if wrong_choice_id in data[repeating_word_id]:
@@ -228,29 +215,22 @@ class RepeatWords(QMainWindow):
         else:
             data[repeating_word_id] = {wrong_choice_id: 1}
 
-        dump_json(data=data, f_path=REPEAT_LOG_PATH)
-
-    def backup(self) -> None:
-        """ Backup лога повторений """
-        from src.backup.setup import backup
-
-        print("Repeat log backupping...")
-        backup(REPEAT_LOG_PATH.name, REPEAT_LOG_PATH)
+        comm_funcs.dump_json(data, consts.REPEAT_LOG_PATH)
 
 
-class ExamplesWindow(QWidget):
+class ExamplesWindow(QtWidgets.QWidget):
     CORPORA = {
-        'en': EnglishCorpusExamples,
-        'ru': RussianCorpusExamples
+        'en': rnc.ParallelCorpus,
+        'ru': rnc.MainCorpus
     }
     CORP_EX_COUNT = 10
 
     def __init__(self,
                  *args,
-                 _s_ex: SelfExamples,
+                 _s_ex: expl.SelfExamples,
                  _c_name: str) -> None:
         super().__init__()
-        uic.loadUi(EXAMPLES_WINDOW_PATH, self)
+        PyQt5.uic.loadUi(consts.EXAMPLES_WINDOW_PATH, self)
 
         self.word = ''
         self.j_word = ''
@@ -285,10 +265,10 @@ class ExamplesWindow(QWidget):
         """
         try:
             # needed word without preps etc
-            content = get_synonyms(self.j_word)
+            content = comm_funcs.get_synonyms(self.j_word)
         except:
             content = []
-        self.linked_words = list(map(str.capitalize, content))[:]
+        self.linked_words = list(map(str.capitalize, content))
 
     def get_corpus_examples(self) -> None:
         """ Init self.c_examples by request to the corpus.
@@ -306,7 +286,7 @@ class ExamplesWindow(QWidget):
 
     def get_self_examples(self) -> None:
         """ Init self.s_examples """
-        self.s_examples = self.self_examples_base.find(self.j_word)
+        self.s_examples = self.self_examples_base.find_examples(self.j_word)
 
     def examples_exist(self) -> bool:
         """ Is there any example """
@@ -364,7 +344,7 @@ class ExamplesWindow(QWidget):
             self.linked_words = []
 
             self.word = word
-            self.j_word = just_word(word)
+            self.j_word = comm_funcs.just_word(word)
 
             self.get_linked_words()
             self.get_corpus_examples()
@@ -384,14 +364,14 @@ class ExamplesWindow(QWidget):
         self.show()
 
 
-class MessageWindow(QWidget):
+class MessageWindow(QtWidgets.QWidget):
     def __init__(self,
                  *args) -> None:
         """ Окно отображения сообщений, правильности или
             неправильности ответов
         """
         super().__init__()
-        uic.loadUi(MESSAGE_WINDOW_PATH, self)
+        PyQt5.uic.loadUi(consts.MESSAGE_WINDOW_PATH, self)
 
         self.initUI()
 
@@ -402,30 +382,21 @@ class MessageWindow(QWidget):
     def display(self,
                 message: str,
                 style: str) -> None:
-        if not (isinstance(message, str) and message):
-            raise Trouble(self.display, message, _p='w_str')
-
         self.MessageText.setStyleSheet(style) if style else ...
         self.MessageText.setText(message)
         self.show()
 
 
-class ShowWindow(QWidget):
+class ShowWindow(QtWidgets.QWidget):
     def __init__(self,
                  *args) -> None:
         super().__init__()
-        uic.loadUi(SHOW_WINDOW_PATH, self)
+        PyQt5.uic.loadUi(consts.SHOW_WINDOW_PATH, self)
         self.marker = lambda x: f"<b><i>{x.capitalize()}</i></b>"
 
     def display(self,
                 items: List,
                 window_title: str = 'Show') -> None:
-        trbl = Trouble(self.display)
-        if not (isinstance(items, list) and items):
-            raise trbl(items, _p='w_list')
-        if not isinstance(window_title, str):
-            raise trbl(window_title, _p='w_str')
-
         self.setWindowTitle(window_title)
         ex = [
             f"{self.marker(i.word)} – {i.get_native(def_only=True)}<br>"
