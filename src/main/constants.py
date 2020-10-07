@@ -11,11 +11,11 @@ from configparser import ConfigParser
 from pathlib import Path
 
 # absolute paths needed to test (otherwise it does not work)
-DATA_BASE_PATH = Path('D:\\Python\\Projects\\Vocabulary\\data')
+DATA_BASE_PATH = Path('/home/kirill/Python/PythonProjects/Vocabulary/data')
 
 USER_DATA_PATH = DATA_BASE_PATH / 'user_data'
 PROGRAM_DATA_PATH = DATA_BASE_PATH / 'program_data'
-UI_BASE_PATH = Path('D:\\Python\\Projects\\Vocabulary\\src\\repeat\\ui')
+UI_BASE_PATH = Path('/home/kirill/Python/PythonProjects/Vocabulary/src/repeat/ui')
 
 # name of vocabulary base
 VOCABULARY_DB_PATH = 'Vocabulary.db'
