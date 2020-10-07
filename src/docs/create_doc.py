@@ -1,5 +1,5 @@
 __all__ = (
-    'create_pdf', 'visual_info', 'create_docx'
+    '', 'visual_info', 'create_docx'
 )
 
 import datetime
@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import List, Dict
 
-import comtypes.client
+# import comtypes.client
 import docx
 import xlsxwriter
 from docx.shared import Pt
@@ -59,38 +59,38 @@ def create_docx(f_path: str or Path,
     _docx.save(f_path)
 
 
-def create_pdf(f_path: str or Path,
-               content: List) -> None:
-    """ Create a PDF file vie docx mediator.
-
-    :param f_path: str or Path, path to file.
-    :param content: list, strable objects.
-    """
-    f_path = Path(f_path)
-    if f_path.exists():
-        raise FileExistsError(f"PDF '{f_path}' still exists")
-
-    # file mediator
-    date = datetime.datetime.today().strftime(const.DATEFORMAT)
-    mediator_path = const.PDF_FOLDER / f"temp_{len(content)}_{date}.docx"
-    try:
-        create_docx(mediator_path, content)
-    except FileExistsError:
-        pass
-    except Exception:
-        raise
-
-    full_mediator_path = Path.cwd() / mediator_path
-    full_pdf_path = Path.cwd() / f_path
-
-    word_client = comtypes.client.CreateObject('Word.Application')
-    mediator = word_client.Documents.Open(full_mediator_path)
-    mediator.SaveAs(full_pdf_path, FileFormat=17)
-
-    mediator.Close()
-    word_client.Quit()
-
-    os.system(f'del "{full_mediator_path}"')
+# def create_pdf(f_path: str or Path,
+#                content: List) -> None:
+#     """ Create a PDF file vie docx mediator.
+#
+#     :param f_path: str or Path, path to file.
+#     :param content: list, strable objects.
+#     """
+#     f_path = Path(f_path)
+#     if f_path.exists():
+#         raise FileExistsError(f"PDF '{f_path}' still exists")
+#
+#     # file mediator
+#     date = datetime.datetime.today().strftime(const.DATEFORMAT)
+#     mediator_path = const.PDF_FOLDER / f"temp_{len(content)}_{date}.docx"
+#     try:
+#         create_docx(mediator_path, content)
+#     except FileExistsError:
+#         pass
+#     except Exception:
+#         raise
+#
+#     full_mediator_path = Path.cwd() / mediator_path
+#     full_pdf_path = Path.cwd() / f_path
+#
+#     word_client = comtypes.client.CreateObject('Word.Application')
+#     mediator = word_client.Documents.Open(full_mediator_path)
+#     mediator.SaveAs(full_pdf_path, FileFormat=17)
+#
+#     mediator.Close()
+#     word_client.Quit()
+#
+#     os.system(f'del "{full_mediator_path}"')
 
 
 def visual_info(f_path: str,

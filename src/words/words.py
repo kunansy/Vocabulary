@@ -592,7 +592,8 @@ class Vocabulary:
 
         :return: None.
         """
-        create_doc.create_pdf(self.get_date_span(), self.all_words())
+        raise NotImplementedError
+        # create_doc.create_pdf(self.get_date_span(), self.all_words())
 
     def search(self,
                item: str or Word) -> List[Word]:
