@@ -124,7 +124,4 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# user data
-*.csv
-*.json
-*.db
+.idea/
