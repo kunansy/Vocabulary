@@ -18,13 +18,18 @@ async def get_words_to_learn(p: int = Query(1, ge=1),
     """ List words to learn """
     offset = (p - 1) * page_size
 
-    return await db.get_words_to_learn(
+    words = await db.get_words_to_learn(
         limit=page_size, offset=offset
     )
+
+    return {
+        'words': words
+    }
 
 
 @router.post('/to-learn/add')
 async def add_word_to_learn(word: schemas.WordToLearn):
+    """ Add word to learn """
     await db.add_word_to_learn(word=word.word)
 
 

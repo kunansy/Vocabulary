@@ -10,9 +10,8 @@ class WordToLearn(BaseModel):
 
 class WordToLearnResponse(WordToLearn):
     word_id: UUID
-    word: constr(strip_whitespace=True)
     added_at: datetime.datetime
 
 
-class WordsToLearnListing(WordToLearnResponse):
+class WordsToLearnListing(BaseModel):
     words: list[WordToLearnResponse]

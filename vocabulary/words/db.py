@@ -12,6 +12,7 @@ async def get_words_to_learn(*,
                              limit: Optional[int] = None,
                              offset: Optional[int] = None) -> list[RowMapping]:
     stmt = sa.select(models.WordToLearn)\
+        .order_by(models.WordToLearn.added_at)\
         .limit(limit).offset(offset)
 
     async with database.session() as ses:
