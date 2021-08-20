@@ -41,3 +41,14 @@ async def remove_word_to_learn(word_id: UUID):
         raise HTTPException(status_code=404)
 
     return word
+
+
+@router.get('/linked-words/{word}',
+            response_model=schemas.LinkedWords)
+async def get_link_words(word: str):
+    synonyms = await db.get_linked_words(word)
+
+    return {
+        "word": word,
+        "synonyms": synonyms
+    }
