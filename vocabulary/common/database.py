@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
 from vocabulary.common import settings
 from vocabulary.common.log import logger
-from vocabulary.models.models import Base
+from vocabulary.models.models import metadata
 
 
 class DatabaseError(Exception):
@@ -32,7 +32,7 @@ sync_engine = create_engine(
     get_dsn('psycopg2'),
     isolation_level=settings.DB_ISOLATION_LEVEL
 )
-Base.metadata.create_all(sync_engine)
+metadata.create_all(sync_engine)
 
 
 @asynccontextmanager
