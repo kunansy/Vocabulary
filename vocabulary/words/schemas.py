@@ -15,3 +15,8 @@ class WordToLearnResponse(WordToLearn):
 
 class WordsToLearnListing(BaseModel):
     words: list[WordToLearnResponse]
+
+
+class LinkedWords(BaseModel):
+    word: str
+    synonyms: list[str]
