@@ -1,26 +1,38 @@
 from contextlib import asynccontextmanager
 from typing import AsyncContextManager
 
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
 from vocabulary.common import settings
 from vocabulary.common.log import logger
+from vocabulary.models.models import Base
 
 
 class DatabaseError(Exception):
     pass
 
 
-dsn = settings.DB_DSN_TEMPLATE.format(
-    username=settings.DB_USERNAME,
-    password=settings.DB_PASSWORD,
-    host=settings.DB_HOST,
-    port=settings.DB_PORT
-)
+def get_dsn(driver: str = 'asyncpg') -> str:
+    return settings.DB_DSN_TEMPLATE.format(
+        driver=driver,
+        username=settings.DB_USERNAME,
+        password=settings.DB_PASSWORD,
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        name=settings.DB_NAME
+    )
+
+
 engine = create_async_engine(
-    dsn,
+    get_dsn(),
     isolation_level=settings.DB_ISOLATION_LEVEL
 )
+sync_engine = create_engine(
+    get_dsn('psycopg2'),
+    isolation_level=settings.DB_ISOLATION_LEVEL
+)
+Base.metadata.create_all(sync_engine)
 
 
 @asynccontextmanager
