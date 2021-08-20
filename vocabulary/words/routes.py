@@ -11,7 +11,7 @@ router = APIRouter(
 )
 
 
-@router.get('/to-learn',
+@router.get('/to-learn/list',
             response_model=schemas.WordsToLearnListing)
 async def get_words_to_learn(p: int = Query(1, ge=1),
                              page_size: int = Query(10, ge=1)):
@@ -23,8 +23,13 @@ async def get_words_to_learn(p: int = Query(1, ge=1),
     )
 
 
+@router.post('/to-learn/add')
+async def add_word_to_learn(word: schemas.WordToLearn):
+    await db.add_word_to_learn(word=word.word)
+
+
 @router.delete('/to-learn/{word_id}',
-               response_model=schemas.WordToLearn)
+               response_model=schemas.WordToLearnResponse)
 async def remove_word_to_learn(word_id: UUID):
     """ Remove the word """
     if (word := await db.delete_word_to_learn(word_id=word_id)) is None:
