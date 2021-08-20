@@ -4,6 +4,10 @@ from environs import Env
 env = Env()
 env.read_env()
 
+# URL and model of synonyms searching
+SYNONYMS_SEARCH_URL = 'https://rusvectores.org/tayga_upos_skipgram_300_2_2019/' \
+                      '{word}/api/json/'
+
 with env.prefixed('API_'):
     API_VERSION = env('VERSION', '0.1.0')
     API_HOST = env('HOST', '127.0.0.1')
