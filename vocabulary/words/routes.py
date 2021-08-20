@@ -16,7 +16,11 @@ router = APIRouter(
 async def get_words_to_learn(p: int = Query(1, ge=1),
                              page_size: int = Query(10, ge=1)):
     """ List words to learn """
-    pass
+    offset = (p - 1) * page_size
+
+    return await db.get_words_to_learn(
+        limit=page_size, offset=offset
+    )
 
 
 @router.delete('/to-learn/{word_id}',
