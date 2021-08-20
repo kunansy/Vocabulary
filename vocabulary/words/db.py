@@ -26,3 +26,12 @@ async def delete_word_to_learn(*,
 
     async with database.session() as ses:
         return (await ses.execute(stmt)).mappings().one_or_none()
+
+
+async def add_word_to_learn(*,
+                            word: str) -> None:
+    stmt = sa.insert(models.WordToLearn)\
+        .values(word=word)
+
+    async with database.session() as ses:
+        await ses.execute(stmt)
