@@ -17,10 +17,10 @@ services:
 
   vocabulary:
     build: .
-    container-name: "vocabulary"
+    container_name: "vocabulary"
     ports:
        - 127.0.0.1:${API_PORT}:8000
-    entrypoint: ["uvicorn", "src.main:app", "--port", "8000",
+    entrypoint: ["uvicorn", "vocabulary.main:app", "--port", "8000",
                  "--host", "0.0.0.0", "--loop", "uvloop"]
     networks:
       - voc-net
