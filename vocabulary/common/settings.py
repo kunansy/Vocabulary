@@ -3,7 +3,11 @@ from environs import Env
 
 env = Env()
 
-API_VERSION = env('VERSION', '0.1.0')
+with env.prefixed('API_'):
+    API_VERSION = env('VERSION', '0.1.0')
+    API_HOST = env('HOST', '127.0.0.1')
+    API_PORT = env.int('PORT', 8000)
+    API_DEBUG = env.bool('DEBUG', False)
 
 with env.prefixed('LOGGER_'):
     LOGGER_NAME = env('NAME', 'Vocabulary')
