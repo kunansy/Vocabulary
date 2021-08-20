@@ -1,12 +1,11 @@
 import datetime
 import uuid
 
-from sqlalchemy import Column, Unicode, DateTime
+from sqlalchemy import Column, Unicode, DateTime, Table, MetaData
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
-from sqlalchemy.ext.declarative import declarative_base
 
 
-Base = declarative_base()
+metadata = MetaData()
 now = datetime.datetime.utcnow
 
 
@@ -16,7 +15,9 @@ def _uuid_gen() -> str:
 
 def PrimaryKey(*args, **kwargs) -> Column:
     if len(args) == 0:
-        args = UUID,
+        args = 'id', UUID
+    elif len(args) == 1:
+        args = *args, UUID
 
     kwargs['primary_key'] = True
     kwargs['default'] = kwargs.get('default', _uuid_gen)
@@ -24,20 +25,22 @@ def PrimaryKey(*args, **kwargs) -> Column:
     return Column(*args, **kwargs)
 
 
-class Word(Base):
-    __tablename__ = 'words'
+Word = Table(
+    'words',
+    metadata,
 
-    word_id = PrimaryKey(UUID)
-    word = Column(Unicode)
-    added_at = Column(DateTime, default=now)
-    eng_t = ARRAY(Unicode)
-    rus_t = ARRAY(Unicode)
+    PrimaryKey('word_id'),
+    Column('word', Unicode, unique=True),
+    Column('added_at', DateTime, default=now),
+    Column('eng_t', ARRAY(Unicode)),
+    Column('rus_t', ARRAY(Unicode))
+)
 
+WordToLearn = Table(
+    'words_to_learn',
+    metadata,
 
-class WordToLearn(Base):
-    __tablename__ = 'words_to_learn'
-
-    word_id = PrimaryKey(UUID)
-    word = Column(Unicode)
-    added_at = Column(DateTime, default=now)
-
+    PrimaryKey('word_id', UUID),
+    Column('word', Unicode, unique=True),
+    Column('added_at', DateTime, default=now)
+)
