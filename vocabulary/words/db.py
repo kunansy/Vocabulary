@@ -1,11 +1,43 @@
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy.engine import RowMapping
+import aiohttp
 import sqlalchemy.sql as sa
+from sqlalchemy.engine import RowMapping
 
-from vocabulary.common import database
+from vocabulary.common import database, settings
+from vocabulary.common.log import logger
 from vocabulary.models import models
+
+
+async def _get_json(url: str):
+    async with aiohttp.ClientSession() as ses:
+        async with ses.get(url) as resp:
+            try:
+                json = await resp.json()
+            except Exception as e:
+                logger.exception(e)
+                return {}
+            return json
+
+
+async def get_linked_words(word: str) -> list[str]:
+    word = word.lower().strip()
+    url = settings.SYNONYMS_SEARCH_URL.format(word=word)
+
+    resp = await _get_json(url)
+
+    try:
+        words = list(list(resp.values())[0].values())[0].keys()
+
+        words = [
+            i.replace('_X', ' sth/sb').replace('_', ' ')
+            for i in words
+        ]
+    except Exception:
+        return []
+    else:
+        return words
 
 
 async def get_words_to_learn(*,
