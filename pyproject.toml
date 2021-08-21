@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "vocabulary"
+version = "1.0.0"
+description = "Expand your vocabulary"
+authors = ["kunansy <kolobov.kirill@list.ru>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "~0.68.0"
+pydantic = "~1.8.2"
+SQLAlchemy = "1.4.22"
+rnc = "~0.7.0"
+uvloop = "~0.16.0"
+asyncpg = "~0.24.0"
+uvicorn = "~0.15.0"
+environs = "~9.3.3"
+psycopg2 = "~2.9.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "~6.2.4"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
