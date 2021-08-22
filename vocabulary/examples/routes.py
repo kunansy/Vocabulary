@@ -1,11 +1,5 @@
 from fastapi import APIRouter, Query
 
-from vocabulary.examples import schemas
-from fastapi import APIRouter, Query
-
-from vocabulary.examples import schemas, db
-from fastapi import APIRouter, Query
-
 from vocabulary.examples import schemas, db
 
 
@@ -25,6 +19,7 @@ async def get_corpus_examples(word: str,
     )
     return {
         "examples": examples,
+        "count": len(examples),
         "lang": lang
     }
 

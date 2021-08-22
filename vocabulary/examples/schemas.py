@@ -16,12 +16,11 @@ class CorpusExample(BaseModel):
     src: str
     ambiguation: bool
     doc_url: HttpUrl
-    found_wordforms: set[str]
+    found_wordforms: tuple[str]
 
     @validator('ambiguation', pre=True)
     def validate_ambiguation(cls,
                              amb: str) -> bool:
-        print(amb)
         return amb.lower() == 'disambiguated'
 
 
@@ -29,12 +28,11 @@ class CorpusExamples(BaseModel):
     examples: list[CorpusExample]
     count: int = 0
 
-    @validator('count', pre=True, always=True)
-    def validate_count(cls,
-                       count: int,
-                       values) -> int:
-        print(values)
-        return len(values['examples'])
+    @validator('examples')
+    def validate_examples(cls,
+                          examples: list[dict]) -> list[dict]:
+        examples.sort(key=lambda ex: len(ex.original))
+        return examples
 
 
 class SelfExamples(BaseModel):
