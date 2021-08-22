@@ -1,8 +1,9 @@
 version: '3'
 
 services:
-  db:
-    image: postgres:13
+  database:
+    image: postgres:13-alpine
+    restart: always
     environment:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -13,11 +14,16 @@ services:
     ports:
        - 127.0.0.1:${DB_PORT}:5432
     networks:
-      - voc-net
+       - voc-net
+    healthcheck:
+        test: "exit 0"
 
   vocabulary:
     build: .
     container_name: "vocabulary"
+    restart: always
+    depends_on:
+       - database
     ports:
        - 127.0.0.1:${API_PORT}:8000
     entrypoint: ["uvicorn", "vocabulary.main:app", "--port", "8000",
