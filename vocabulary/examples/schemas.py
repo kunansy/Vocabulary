@@ -26,7 +26,15 @@ class CorpusExample(BaseModel):
 
 
 class CorpusExamples(BaseModel):
-    pass
+    examples: list[CorpusExample]
+    count: int = 0
+
+    @validator('count', pre=True, always=True)
+    def validate_count(cls,
+                       count: int,
+                       values) -> int:
+        print(values)
+        return len(values['examples'])
 
 
 class SelfExamples(BaseModel):
