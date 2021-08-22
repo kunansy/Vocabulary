@@ -4,6 +4,9 @@ from vocabulary.examples import schemas
 from fastapi import APIRouter, Query
 
 from vocabulary.examples import schemas, db
+from fastapi import APIRouter, Query
+
+from vocabulary.examples import schemas, db
 
 
 router = APIRouter(
@@ -16,10 +19,14 @@ router = APIRouter(
             response_model=schemas.CorpusExamples)
 async def get_corpus_examples(word: str,
                               pages_count: int = Query(10, ge=1),
-                              language: schemas.LANGUAGES = Query('en')):
-    return await db.get_corpus_examples(
-        word=word, mycorp=language, pages_count=pages_count
+                              lang: schemas.LANGUAGES = Query('en')):
+    examples = await db.get_corpus_examples(
+        word=word, mycorp=lang, pages_count=pages_count
     )
+    return {
+        "examples": examples,
+        "lang": lang
+    }
 
 
 @router.get('/self/{word}',
