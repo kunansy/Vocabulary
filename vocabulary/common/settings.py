@@ -7,6 +7,7 @@ env.read_env()
 # URL and model of synonyms searching
 SYNONYMS_SEARCH_URL = 'https://rusvectores.org/tayga_upos_skipgram_300_2_2019/' \
                       '{word}/api/json/'
+CORPUS_EXAMPLES_MARKER = lambda ex: f"<b>{ex.upper()}</b>"
 
 with env.prefixed('API_'):
     API_VERSION = env('VERSION', '0.1.0')

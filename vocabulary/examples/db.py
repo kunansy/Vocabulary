@@ -2,6 +2,8 @@ from typing import Any
 
 import rnc
 
+from vocabulary.common import settings
+
 
 async def get_corpus_examples(*,
                               mycorp: str,
@@ -9,7 +11,8 @@ async def get_corpus_examples(*,
                               pages_count: int) -> list[dict[str, Any]]:
     corp = rnc.ParallelCorpus(
         word, pages_count,
-        mycorp=rnc.mycorp[mycorp], marker=str.upper
+        mycorp=rnc.mycorp[mycorp],
+        marker=settings.CORPUS_EXAMPLES_MARKER
     )
     await corp.request_examples_async()
     return [
