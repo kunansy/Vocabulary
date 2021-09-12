@@ -15,13 +15,16 @@ services:
     networks:
        - voc-net
     healthcheck:
-        test: "exit 0"
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   vocabulary:
     build: .
-    container_name: "vocabulary"
+    container_name: vocabulary
     depends_on:
-       - database
+      - database
     ports:
        - 127.0.0.1:${API_PORT}:8000
     entrypoint: ["uvicorn", "vocabulary.main:app", "--port", "8000",
@@ -29,9 +32,10 @@ services:
     networks:
       - voc-net
     healthcheck:
-        test: "exit 0"
-    depends_on:
-      - database
+      test: curl -f http://localhost:8000/words/to-learn/list || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   database-volume:
