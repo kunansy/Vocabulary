@@ -10,6 +10,8 @@ services:
     volumes:
       - database-volume:/var/lib/postgresql/data
     container_name: database
+    ports:
+      - "127.0.0.1:${DB_PORT}:5432"
     networks:
        - voc-net
     healthcheck:
