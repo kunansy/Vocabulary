@@ -2,13 +2,18 @@
 """ It helps to migrate the data from sqlite
 to the current postgresql database
 """
+import argparse
+import asyncio
 import sqlite3
 from contextlib import contextmanager
 from typing import ContextManager
 
 import requests
 
+from vocabulary.common import database
 from vocabulary.common.log import logger
+from vocabulary.models import models
+
 
 API_HOST = 'http://127.0.0.1:9001'
 
@@ -51,9 +56,31 @@ def migrate_words_to_learn() -> None:
     insert_words_to_learn(words)
 
 
-def main() -> None:
-    migrate_words_to_learn()
+async def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Migrate data from old sqlite db to current PostgreSQL"
+    )
+    parser.add_argument(
+        '--migrate',
+        action="store_true",
+        help="Make migrations",
+        dest="migrate"
+    )
+    parser.add_argument(
+        '--create-schema',
+        action="store_true",
+        help="Create all tables",
+        dest="create_schema"
+    )
+    args = parser.parse_args()
+
+    if args.create_schema:
+        async with database.engine.begin() as conn:
+            await conn.run_sync(models.metadata.create_all)
+
+    if args.migrate:
+        migrate_words_to_learn()
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
