@@ -16,20 +16,23 @@ main {
     min-height: 20vh;
 }
 
-.hover:hover {
-    box-shadow: 0 0 5vh rgba(33, 33, 33, .5);
-    transition: box-shadow .2s ease-in-out;
-}
-
-div.form {
+form {
     font-size: 2.5vh;
     display: flex;
     flex-direction: column;
     margin: auto auto 3vh;
 }
+form input {
+    margin: auto;
+    padding-left: .5vw;
+    padding-right: .5vw;
+    width: 25vw;
+    height: 5vh;
+    font-size: 2.5vh;
+}
 
 .submit-button {
-    margin: auto;
+    margin: 2vh auto auto;
     height: 3vw;
     width: 9vw;
     border: none;
@@ -39,10 +42,20 @@ div.form {
     box-shadow: 0 0 1vw rgba(0,0,0,0.5);
 }
 
-.input::-webkit-outer-spin-button,
-.input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
+::-webkit-scrollbar {
+    display: none;
+}
+
+div.corpus-example {
+    border: black 0.25vh solid;
+    margin: 2vh auto;
+    width: 50vw;
+    border-radius: 3vh;
+    padding: 5vh;
+}
+
+div.corpus-example p {
+    word-wrap: break-word;
 }
 
 .footer {
