@@ -1,12 +1,10 @@
 from contextlib import asynccontextmanager
 from typing import AsyncContextManager
 
-from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from vocabulary.common import settings
 from vocabulary.common.log import logger
-from vocabulary.models.models import metadata
 
 
 class DatabaseError(Exception):
@@ -28,11 +26,6 @@ engine = create_async_engine(
     get_dsn(),
     isolation_level=settings.DB_ISOLATION_LEVEL
 )
-sync_engine = create_engine(
-    get_dsn('psycopg2'),
-    isolation_level=settings.DB_ISOLATION_LEVEL
-)
-metadata.create_all(sync_engine)
 
 
 @asynccontextmanager
