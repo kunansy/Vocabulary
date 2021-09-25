@@ -1,13 +1,15 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
-from starlette.requests import Request
-from starlette.responses import JSONResponse
+from fastapi.requests import Request
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from vocabulary.common import settings, database
+from vocabulary.common import database, settings
 from vocabulary.common.log import logger
-from vocabulary.words.routes import router as words_router
 from vocabulary.examples.routes import router as examples_router
+from vocabulary.view.routes import router as view_router
+from vocabulary.words.routes import router as words_router
 
 
 app = FastAPI(
@@ -18,6 +20,9 @@ app = FastAPI(
 
 app.include_router(words_router)
 app.include_router(examples_router)
+app.include_router(view_router)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 async def database_exception_handler(request: Request,
