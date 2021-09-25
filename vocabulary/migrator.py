@@ -10,8 +10,7 @@ import requests
 
 from vocabulary.common.log import logger
 
-
-HOST = 'http://127.0.0.1:9001'
+API_HOST = 'http://127.0.0.1:9001'
 
 
 @contextmanager
@@ -41,12 +40,14 @@ def get_words_to_learn() -> list[str]:
 
 def insert_words_to_learn(words: list[str]) -> None:
     for word in words:
-        resp = requests.post(f"{HOST}/words/to-learn/add", json={"word": word})
+        logger.debug("Inserting word to learn '%s'", word)
+        resp = requests.post(f"{API_HOST}/words/to-learn/add", json={"word": word})
         resp.raise_for_status()
+
 
 def migrate_words_to_learn() -> None:
     words = get_words_to_learn()
-    print(f"Migrating {len(words)} words to learn...")
+    logger.info(f"Migrating {len(words)} words to learn...")
     insert_words_to_learn(words)
 
 
