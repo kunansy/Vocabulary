@@ -17,6 +17,8 @@ async def get_corpus_examples(word: str,
     examples = await db.get_corpus_examples(
         word=word, mycorp=lang, pages_count=pages_count
     )
+    examples.sort(key=lambda ex: len(ex.original))
+
     return {
         "examples": examples,
         "count": len(examples),

@@ -28,12 +28,6 @@ class CorpusExamples(BaseModel):
     examples: list[CorpusExample]
     count: int = 0
 
-    @validator('examples')
-    def validate_examples(cls,
-                          examples: list[dict]) -> list[dict]:
-        examples.sort(key=lambda ex: len(ex.original))
-        return examples
-
 
 class SelfExamples(BaseModel):
     pass

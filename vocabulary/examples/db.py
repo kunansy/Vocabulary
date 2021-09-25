@@ -15,6 +15,7 @@ async def get_corpus_examples(*,
         marker=settings.CORPUS_EXAMPLES_MARKER
     )
     await corp.request_examples_async()
+
     return [
         {
             'original': ex.en,

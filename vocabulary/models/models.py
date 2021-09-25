@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID, ARRAY
 
 
 metadata = MetaData()
-now = datetime.datetime.utcnow
+utcnow = datetime.datetime.utcnow
 
 
 def _uuid_gen() -> str:
@@ -31,9 +31,9 @@ Word = Table(
 
     PrimaryKey('word_id'),
     Column('word', Unicode, unique=True),
-    Column('added_at', DateTime, default=now),
-    Column('eng_t', ARRAY(Unicode)),
-    Column('rus_t', ARRAY(Unicode))
+    Column('added_at', DateTime, default=utcnow),
+    Column('eng_t', ARRAY(Unicode), comment='Английские дефиниции слова'),
+    Column('rus_t', ARRAY(Unicode), comment='Русские дефиниции слова')
 )
 
 WordToLearn = Table(
@@ -42,5 +42,5 @@ WordToLearn = Table(
 
     PrimaryKey('word_id', UUID),
     Column('word', Unicode, unique=True),
-    Column('added_at', DateTime, default=now)
+    Column('added_at', DateTime, default=utcnow)
 )
