@@ -1,0 +1,51 @@
+html, body {
+    padding: 0;
+    margin: 0;
+    font-family: Roboto, 'Open Sans', sans-serif;
+    color: black;
+}
+
+.header {
+    background-color: black;
+}
+
+main {
+    display: flex;
+    flex-direction: column;
+    margin: 10vh auto;
+    min-height: 20vh;
+}
+
+.hover:hover {
+    box-shadow: 0 0 5vh rgba(33, 33, 33, .5);
+    transition: box-shadow .2s ease-in-out;
+}
+
+div.form {
+    font-size: 2.5vh;
+    display: flex;
+    flex-direction: column;
+    margin: auto auto 3vh;
+}
+
+.submit-button {
+    margin: auto;
+    height: 3vw;
+    width: 9vw;
+    border: none;
+    outline: none !important;
+    background-color: black;
+    color: white;
+    box-shadow: 0 0 1vw rgba(0,0,0,0.5);
+}
+
+.input::-webkit-outer-spin-button,
+.input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.footer {
+    background-color: black;
+    height: 50vh;
+}
