@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED 1
 
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get -y install libpq-dev gcc wget curl \
+    && apt-get -y install curl \
     && pip install poetry --no-cache-dir \
     && rm -rf /var/lib/apt/lists/*
 
