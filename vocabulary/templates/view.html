@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title> Words examples {% if word %} | {% endif %} {{ word }}</title>
+  <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+</head>
+<body>
+<header class="header"></header>
+
+<main class="main">
+    <div class="search-input form">
+        <form method="POST" action="/view" class="form">
+            <input class="input" type="text" placeholder="Enter a word" name="word" title="Word to search">
+            <button type="submit" class="submit-button"> Search </button>
+        </form>
+    </div>
+
+    <div class="linked-words">
+        {% for word in linked_words %}
+            <div class="linked-word">
+                <p class="linked-word"> {{ word }} </p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="corpus-examples">
+        {% for corp_example in corpus_examples %}
+            <div class="corpus-example">
+                <p class="corpus-example original"> {{ corp_example['original'] }} </p>
+                <p class="corpus-example native"> {{ corp_example['native'] }} </p>
+                <p class="corpus-example source"> {{ corp_example['src'] }} </p>
+            </div>
+        {% endfor %}
+    </div>
+</main>
+
+<footer class="footer"></footer>
+</body>
+</html>
