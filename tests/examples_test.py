@@ -8,7 +8,7 @@ rnc.logger.disabled = True
 client = TestClient(app)
 
 
-def tet_getting_corpus_examples_with_default_args():
+def test_getting_corpus_examples_with_default_args():
     resp = client.get('/examples/corpus/get')
     json = resp.json()
 
@@ -24,7 +24,7 @@ def tet_getting_corpus_examples_with_default_args():
     )
 
 
-def tet_custom_queries(sleep):
+def test_custom_queries(sleep):
     resp = client.get('/examples/corpus/get?pages_count=1&lang=en')
     json = resp.json()
 
@@ -40,7 +40,7 @@ def tet_custom_queries(sleep):
     )
 
 
-def tet_custom_lang_query(sleep):
+def test_custom_lang_query(sleep):
     resp = client.get('/examples/corpus/пальто?pages_count=1&lang=fr')
     json = resp.json()
 
