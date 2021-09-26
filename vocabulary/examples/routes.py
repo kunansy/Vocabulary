@@ -13,9 +13,9 @@ router = APIRouter(
             response_model=schemas.CorpusExamples)
 async def get_corpus_examples(word: str,
                               pages_count: int = Query(10, ge=1),
-                              lang: schemas.LANGUAGES = Query('en')):
+                              lang: schemas.LANGUAGES = Query('en')): # type: ignore
     if isinstance(lang, params.Query):
-        lang = lang.default
+        lang = lang.default # type: ignore
     if isinstance(pages_count, params.Query):
         pages_count = pages_count.default
 

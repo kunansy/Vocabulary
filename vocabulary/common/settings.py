@@ -7,7 +7,7 @@ env = Env()
 
 SYNONYMS_SEARCH_URL = 'https://rusvectores.org/tayga_upos_skipgram_300_2_2019/' \
                       '{word}/api/json/'
-CORPUS_EXAMPLES_MARKER = lambda ex: f"<b>{ex.upper()}</b>"
+CORPUS_EXAMPLES_MARKER = lambda ex: f"<b>{ex.upper()}</b>" # noqa
 
 with env.prefixed('API_'):
     API_VERSION = env('VERSION', '0.1.0')

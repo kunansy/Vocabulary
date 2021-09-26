@@ -5,7 +5,7 @@ from pydantic import BaseModel, constr
 
 
 class WordToLearn(BaseModel):
-    word: constr(strip_whitespace=True)
+    word: constr(strip_whitespace=True) # type: ignore
 
 
 class WordToLearnResponse(WordToLearn):

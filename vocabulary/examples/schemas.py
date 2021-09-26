@@ -4,7 +4,7 @@ from pydantic import BaseModel, HttpUrl, validator
 from rnc import mycorp
 
 
-LANGUAGES = Literal[tuple(
+LANGUAGES = Literal[tuple( # type: ignore
     k for k in mycorp.Parallel.__dict__.keys()
     if k[0].islower()
 )]
@@ -26,7 +26,7 @@ class CorpusExample(BaseModel):
 
 class CorpusExamples(BaseModel):
     examples: list[CorpusExample]
-    lang: LANGUAGES
+    lang: LANGUAGES # type: ignore
     count: int = 0
 
 
