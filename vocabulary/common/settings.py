@@ -4,6 +4,7 @@ from environs import Env
 
 
 env = Env()
+env.read_env()
 
 SYNONYMS_SEARCH_URL = 'https://rusvectores.org/tayga_upos_skipgram_300_2_2019/' \
                       '{word}/api/json/'
