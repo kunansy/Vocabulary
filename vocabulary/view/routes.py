@@ -12,7 +12,7 @@ router = APIRouter(
     tags=['view']
 )
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="vocabulary/templates")
 
 
 @router.get('/', response_class=HTMLResponse)

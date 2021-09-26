@@ -22,7 +22,7 @@ app.include_router(words_router)
 app.include_router(examples_router)
 app.include_router(view_router)
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="vocabulary/static"), name="static")
 
 
 async def database_exception_handler(request: Request,
