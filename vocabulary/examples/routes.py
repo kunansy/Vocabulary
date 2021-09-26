@@ -9,7 +9,7 @@ router = APIRouter(
 )
 
 
-@router.get('/coprus/{word}',
+@router.get('/corpus/{word}',
             response_model=schemas.CorpusExamples)
 async def get_corpus_examples(word: str,
                               pages_count: int = Query(10, ge=1),
