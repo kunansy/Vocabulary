@@ -62,8 +62,13 @@ def test_invalid_lang():
     assert resp.status_code == 422
 
 
-def test_invalid_pages_count():
+def test_invalid_pages_count_type():
     resp = client.get('/examples/corpus/пальто?pages_count=ff&lang=en')
+    assert resp.status_code == 422
+
+
+def test_invalid_pages_count_zero():
+    resp = client.get('/examples/corpus/пальто?pages_count=0&lang=en')
     assert resp.status_code == 422
 
 
