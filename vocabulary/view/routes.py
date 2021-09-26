@@ -22,7 +22,7 @@ async def get_view(request: Request):
 
 
 @router.post('/', response_class=HTMLResponse)
-async def get_view(request: Request, word: str = Body(...)):
+async def post_view(request: Request, word: str = Body(...)):
     word = word.split('=')[-1]
     corpus_examples, linked_words = {}, {}
 
