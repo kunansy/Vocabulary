@@ -11,7 +11,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock /app/
+COPY pyproject.toml /app
 RUN poetry config virtualenvs.create false \
     && poetry install --no-dev -n
 
