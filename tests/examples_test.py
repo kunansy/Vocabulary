@@ -1,3 +1,4 @@
+import pytest
 import rnc
 from fastapi.testclient import TestClient
 
@@ -57,18 +58,15 @@ def test_custom_lang_query(sleep):
     )
 
 
-def test_invalid_lang():
-    resp = client.get('/examples/corpus/пальто?pages_count=1&lang=shue')
-    assert resp.status_code == 422
-
-
-def test_invalid_pages_count_type():
-    resp = client.get('/examples/corpus/пальто?pages_count=ff&lang=en')
-    assert resp.status_code == 422
-
-
-def test_invalid_pages_count_zero():
-    resp = client.get('/examples/corpus/пальто?pages_count=0&lang=en')
+@pytest.mark.parametrize(
+    "pages_count,lang", [
+        (1, 'shue'),
+        ('ff', 'en'),
+        (0, 'en')
+    ]
+)
+def test_invalid_lang(pages_count, lang):
+    resp = client.get(f'/examples/corpus/пальто?pages_count={pages_count}&lang={lang}')
     assert resp.status_code == 422
 
 
