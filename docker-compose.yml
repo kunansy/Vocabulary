@@ -16,7 +16,7 @@ services:
     networks:
        - voc-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
+      test: pg_isready -U ${DB_USERNAME} -q -d ${DB_NAME}
       interval: 10s
       timeout: 5s
       retries: 3
