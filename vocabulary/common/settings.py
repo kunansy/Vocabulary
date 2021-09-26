@@ -1,8 +1,9 @@
+import os
+
 from environs import Env
 
 
 env = Env()
-env.read_env()
 
 SYNONYMS_SEARCH_URL = 'https://rusvectores.org/tayga_upos_skipgram_300_2_2019/' \
                       '{word}/api/json/'
@@ -28,3 +29,5 @@ with env.prefixed('DB_'):
     DB_PASSWORD = env('PASSWORD')
     DB_NAME = env('NAME')
     DB_ISOLATION_LEVEL = env('ISOLATION_LEVEL', 'REPEATABLE READ')
+
+os.environ.clear()
