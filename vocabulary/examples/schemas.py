@@ -26,6 +26,7 @@ class CorpusExample(BaseModel):
 
 class CorpusExamples(BaseModel):
     examples: list[CorpusExample]
+    lang: LANGUAGES
     count: int = 0
 
 
