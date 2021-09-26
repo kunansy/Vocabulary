@@ -21,7 +21,7 @@ async def get_corpus_examples(*,
 
     return [
         {
-            'original': ex.en,
+            'original': getattr(ex, mycorp),
             'native': ex.ru,
             'src': ex.src,
             'ambiguation': ex.ambiguation,
