@@ -17,6 +17,12 @@
     </div>
 
     <div class="linked-words">
+        {% if not linked_words %}
+            <div class="linked-word not-found">
+                <p class="linked-word not-found"> Here there will be linked words </p>
+            </div>
+        {% endif %}
+
         {% for word in linked_words %}
             <div class="linked-word">
                 <p class="linked-word"> {{ word }} </p>
@@ -25,6 +31,12 @@
     </div>
 
     <div class="corpus-examples">
+        {% if not corpus_examples %}
+            <div class="corpus-example not-found">
+                <p class="corpus-example not-found"> Here there will be corpus examples </p>
+            </div>
+        {% endif %}
+
         {% for corp_example in corpus_examples %}
             <div class="corpus-example">
                 <p class="corpus-example original"> {{ corp_example['original'] }} </p>
