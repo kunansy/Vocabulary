@@ -13,7 +13,7 @@ coverage.xml
 *.log
 .git
 .mypy_cache
-.pytest_cache
+*.pytest_cache
 .hypothesis
 .env
 *.db
