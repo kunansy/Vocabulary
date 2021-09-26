@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import sqlite3
 from contextlib import contextmanager
-from typing import ContextManager
+from typing import Iterator
 
 import requests
 
@@ -19,7 +19,7 @@ API_HOST = 'http://127.0.0.1:9001'
 
 
 @contextmanager
-def session() -> ContextManager[sqlite3.Connection]:
+def session() -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect('../eng.db')
     try:
         yield conn

@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager
+from typing import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -29,7 +29,7 @@ engine = create_async_engine(
 
 
 @asynccontextmanager
-async def session(**kwargs) -> AsyncContextManager[AsyncSession]:
+async def session(**kwargs) -> AsyncIterator[AsyncSession]:
     new_ses = AsyncSession(bind=engine, expire_on_commit=False, **kwargs)
     try:
         yield new_ses
