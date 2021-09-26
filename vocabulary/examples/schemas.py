@@ -16,7 +16,7 @@ class CorpusExample(BaseModel):
     src: str
     ambiguation: bool
     doc_url: HttpUrl
-    found_wordforms: tuple[str]
+    found_wordforms: tuple[str, ...]
 
     @validator('ambiguation', pre=True)
     def validate_ambiguation(cls,
