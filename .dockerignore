@@ -19,3 +19,6 @@ coverage.xml
 *.db
 *.sh
 .github
+.idea
+logs
+*.md
