@@ -44,4 +44,4 @@ jobs:
     - name: Run tests
       run: | 
         source .venv/bin/activate
-        pytest -vv
+        API_HOST=127.0.0.1 API_PORT=9002 DB_HOST=database DB_PORT=5432 DB_USERNAME=docker DB_PASSWORD=docker DB_NAME=db pytest -vv
